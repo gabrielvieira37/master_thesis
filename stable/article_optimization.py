@@ -61,8 +61,6 @@ def load_data(data_path):
 
 
 
-
-
 def normalize_characteristics(firm_characteristics, characteristics_names):
     """
     Normalize firm characteristics by subtracting it by the mean of all stocks at each time,
@@ -151,12 +149,132 @@ def create_characteristics(me_df, mom_df, btm_df, return_df, stocks_names):
 
     return firm_characteristics, r, time, number_of_stocks
 
+def utility_function(risk_factor, portfolio_return):
+    """
+    CRRA Utility function
+
+    Parameters
+    ----------
+    risk_factor: int
+        Risk constant, increase it to become more risk averse.
+    portifolio_return: float
+        Mean return of a portifolio.
+
+    Returns
+    -------
+    value: float
+        Utility function value
+    """
+    value = ((1 + portfolio_return)**(1-risk_factor))/(1-risk_factor)
+    return value
+
+def optimizing_step(firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark, risk_constant):
+    """
+    Find the coefficient theta that best maps the firm characteristics and the returns.
+
+    Parameters
+    ----------
+    firm_characteristics: pandas.DataFrame
+        Normalized firm characteristcs dataframe.
+    r: numpy.array
+        Return of the stocks through time.
+    time: int
+        Number of time periods this slice of firm characterists are evaluating.
+    number_of_stocks: int
+        Number of stocks that we created the firm characteristics dataframe.
+    theta0: numpy.array
+        Initial coefficients mapping the return and the firm characteristics.
+    risk_constant: int
+        Risk constant, increase it to become more risk averse.
+    w_benchmark: numpy.array
+        Benchmark weights, used to create optimized weights.
+
+    Returns
+    -------
+    sol: scipy.optimize.OptimizeResult
+        Solution object used to retrieve theta optimized and optimization information.
+    mean_obj_r: [float, ]
+        List of objective values through each optimization step.
+    mean_r: [float, ]
+        List of return using optimized weights through each optimization step.
+    """
+    LOGGER.info("Started optimization step.")
+    def objective(theta):
+        """
+        Optimize the returns of the utility function through time.
+
+        Parameters
+        ----------
+        theta: numpy.array
+            Coefficients mapping the return and the firm characteristics.
+        
+        Returns
+        -------
+        value: float
+            Average value of return of utility function through time.
+        """
+        w = np.empty(shape=(number_of_stocks, time))
+        for i in range(number_of_stocks):
+            w[i] = w_benchmark[i].copy() + (1/number_of_stocks)*theta.dot(firm_characteristics[i].copy().T)
+        return -sum(sum(utility_function(risk_constant, w[:,:-1]*r[:,1:])))/time
+    
+    mean_obj_r = []
+    mean_r = []
+    
+    def callback_steps(thetaI):
+        """
+        Callback of optimization function.
+
+        Parameters
+        ----------
+        thetaI: numpy.array
+            Optimized theta vector through the ith optmization step.
+
+        """        
+        LOGGER.debug(f"i:{len(mean_obj_r)}, theta i: {thetaI}, f(theta):{objective(thetaI)}")
+        mean_obj_r.append(-objective(thetaI))
+
+        w_iter = np.empty(shape=(number_of_stocks, time))
+        for i in range(number_of_stocks):
+            w_iter[i] = w_benchmark[i] + (1/number_of_stocks)*thetaI.dot(firm_characteristics[i].copy().T)
+        mean_r.append(sum(sum(w_iter*r))/time)
+
+    sol = minimize(objective, theta0, callback=callback_steps, method='BFGS')
+    LOGGER.info("Finished optimization step.")
+    return sol, mean_obj_r, mean_r
+
+def create_w_benchmark(number_of_stocks, time):
+    """
+    Create benchmark weights, uniform weighted on the number of stocks .
+
+    Parameters
+    ----------
+    number_of_stocks: int
+        Number of stocks to be analized.
+    time: int
+        Number of periods of time this slice has.
+    Returns
+    -------
+    w_bechmark: numpy.array
+        Benchmark weights with shape equal to (number_of_stocks, time).
+    """
+    w_benchmark = np.ones(shape=(number_of_stocks, time))
+    w_benchmark *= 1/number_of_stocks
+    LOGGER.info("Created benchmark weights")
+    return w_benchmark
 
 def main():
     data_path = "../data/"
     mcap, lreturn, book_to_mkt_ratio, monthly_return = load_data(data_path)
     stock_names = list(monthly_return.columns)
     firm_characteristics, r, time, number_of_stocks = create_characteristics(mcap, lreturn, book_to_mkt_ratio, monthly_return,stock_names)
+    w_benchmark = create_w_benchmark(number_of_stocks, time)
+    
+    np.random.seed(123)
+    risk_constant = 5
+    theta0 = np.random.rand(1, 3)
+
+    sol, mean_obj_r, mean_r = optimizing_step(firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark, risk_constant)
     print("Done")
 
 
