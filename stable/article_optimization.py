@@ -276,7 +276,7 @@ def data_split(size, train_percentage):
     
     Returns
     -------
-    indexes_list: [(train_idxes, test_idxes)]
+    indexes_list: [( [int, ], [int, ] )]
         List of tuples containing training indexes and testing indexes.
 
     """
@@ -289,6 +289,18 @@ def data_split(size, train_percentage):
 
 def plot_splitted_data(characteristic_df, characteristic_name, indexes_list, stock_name):
     """
+    Plot train and test splitted data and save it to a jpg file in the folder.
+    
+    Parameters
+    ----------
+    characteristic_df : pandas.DataFrame
+        A characteristic dataframe to be splitted.
+    characteristic_name: str
+        The name of the characteristic used here.
+    indexes_list: [( [int, ], [int, ] )]
+        List of tuples containing training indexes and testing indexes.
+    stock_name: str
+        The stock tick to be used for lookup.
     """
     LOGGER.info("PLotting splitted data example.")
     plt.figure(figsize=(12,8))
@@ -304,12 +316,43 @@ def plot_splitted_data(characteristic_df, characteristic_name, indexes_list, sto
         plt.ylabel(characteristic_name)
         plt.legend()
     plt.savefig(f'./{stock_name}_monthly_{characteristic_name.lower()}.jpg')
-    plt.show()
+    # plt.show()
 
+
+# TO-DO: Change it to load any number of characteristics
 def evaluate_theta(sol_theta, test_me, test_mom, test_btm, test_return, stocks_names):
     """
-    Evaluate theta on test sample.
+    Evaluate theta optimized return on test sample.
+
+    Parameters
+    ----------
+
+    sol_theta: numpy.array
+        Best theta founded on optimization.
+    test_me: pandas.DataFrame
+        Test set of the market capitalization characteristic.
+    test_mom: pandas.DataFrame
+        Test set of the lagged return characteristic.
+    test_btm: pandas.DataFrame
+        Test set of the book to market ratio characteristic.
+    test_return: pandas.DataFrame
+        Test set of the returns.
+    stocks_names: [str, ]
+        List of stocks to be looked up.
+
+    Returns
+    -------
+
+    benchmark_test_r: float
+        Benchmark return on test set.
+    benchmark_test_r_std: float
+        Benchmark return standard deviation on test set.
+    test_r: float
+        Optimized return on test set.
+    test_r_std: float
+        Optimized return standard deviation on test set.
     """
+
     LOGGER.info("Evaluating theta on test set.")
     #### TESTING CHARACTERISTICS
     firm_characteristics_test, r_test, time_test, number_of_stocks = create_characteristics(test_me, test_mom, test_btm, test_return, stocks_names)
@@ -333,12 +376,52 @@ def evaluate_theta(sol_theta, test_me, test_mom, test_btm, test_return, stocks_n
     test_r_std = r_test_series['std']
 
     LOGGER.info("Evalueted theta on test set.")
+    # import pdb; pdb.set_trace()
     return benchmark_test_r, benchmark_test_r_std, test_r, test_r_std
 
 
 # TO-DO: Change it to use any number of characteristics
 def create_experiment(mcap, lreturn, book_to_mkt_ratio, monthly_return , stocks_names, indexes_list, risk_constant):
     """
+    Create experiment using characteristics, list of stocks to look up, 
+    indexes of how to split data and the constant of risk aversion.
+
+    Parameters
+    ----------
+
+    mcap: pandas.DataFrame
+        Market capitalization of the firms
+    lreturn: pandas.DataFrame
+        Lagged return of the firms.
+    book_to_mkt_ratio: pandas.DataFrame
+        Book to market ratio of the firms
+    monthly_return: pandas.DataFrame
+        Monthly return of the firms.
+    stocks_names: [str, ]
+        List of stock names as strings.
+    indexes_list: [( [int, ], [int, ] )]
+        List of tuples containing training indexes and testing indexes.
+    risk_constant: int
+        Risk constant, increase it to become more risk averse.
+
+    Returns
+    -------
+
+    benchmark_mean_return: float
+        Mean benchmark return for each time frame, in this case for each month.
+    mean_obj_r: [float, ]
+        List of objective values through each optimization step.
+    mean_r: [float, ]
+        List of return using optimized weights through each optimization step.
+    benchmark_test_r: float
+        Benchmark return on test set.
+    benchmark_test_r_std: float
+        Benchmark return standard deviation on test set.
+    test_r: float
+        Optimized return on test set.
+    test_r_std: float
+        Optimized return standard deviation on test set.
+
     """
     LOGGER.info("Started experiment.")
     np.random.seed(123)
@@ -375,6 +458,72 @@ def create_experiment(mcap, lreturn, book_to_mkt_ratio, monthly_return , stocks_
         LOGGER.info("Finished experiment.")
         return benchmark_mean_return, mean_obj_r, mean_r, benchmark_test_r, benchmark_test_r_std, test_r, test_r_std
 
+
+def plot_final_results(
+    mean_obj_r_runs, mean_r_runs, benchmark_mean_return_runs, test_r_runs, 
+    benchmark_test_r_runs, test_r_runs_std, benchmark_test_r_runs_std
+    ):
+    """
+
+    """
+
+    LOGGER.info("Plotting final results.")
+    # Only allows 10 runs, to allow more increase color names.
+    colors={
+        0:'black',
+        1:'blue',
+        2:'coral',
+        3:'magenta',
+        4:'grey',
+        5:'violet',
+        6:'brown',
+        7:'red',
+        8:'salmon',
+        9:'green'
+    }
+
+    plt.figure(figsize=(12,9))
+    plt.title("Mean objective return for each optimization step")
+    for run, mean_obj_r in enumerate(mean_obj_r_runs):
+        x = range(len(mean_obj_r))
+        plt.plot(x, mean_obj_r, label=f'Objective return, Run:{run+1}', c=colors[run])
+    plt.xlabel('Iteration step')
+    plt.ylabel('Objective return')
+    plt.legend()
+    plt.grid()
+    plt.savefig(f'./objective_return_over_steps.jpg')
+    # plt.show()
+
+    plt.figure(figsize=(12,9))
+    plt.title("Mean return using weight for each optimization step")
+    for run, mean_r in enumerate(mean_r_runs):
+        x = range(len(mean_r))
+        plt.plot(x, mean_r, label=f'Optimized return, Run:{run+1}', c=colors[run])
+        plt.plot(x, [benchmark_mean_return_runs[run]]*len(mean_r), label=f'Benchmark return, Run:{run+1}', c=colors[run], linestyle='dashed')
+    plt.xlabel('Iteration step')
+    plt.ylabel('Mean return')
+    plt.legend()
+    plt.grid()
+    plt.savefig(f'./mean_return_over_steps.jpg')
+    # plt.show()
+
+
+    width = 0.1
+    br1 = np.arange(len(test_r_runs))
+    br2 = [x + width for x in br1]
+    plt.figure(figsize=(12,9))
+    plt.title("Mean return on test set")
+    plt.ylabel('Mean return')
+    plt.bar(br1, test_r_runs, label='Optimized test return', yerr=test_r_runs_std, color='blue', width = 0.09)
+    plt.bar(br2, benchmark_test_r_runs, label='Benchmark test return', yerr= benchmark_test_r_runs_std, color='red', width = 0.09)
+    plt.xticks([])
+    plt.grid()
+    plt.legend()
+    plt.savefig(f'./mean_return_test_set.jpg')
+    # plt.show()
+    LOGGER.info("Saved plots in folder.")
+
+
 def main():
     data_path = "../data/"
     mcap, lreturn, book_to_mkt_ratio, monthly_return = load_data(data_path)
@@ -387,6 +536,19 @@ def main():
     benchmark_mean_return, mean_obj_r, mean_r, benchmark_test_r, benchmark_test_r_std, test_r, test_r_std = create_experiment(
         mcap, lreturn, book_to_mkt_ratio, monthly_return , stocks_names, indexes_list, risk_constant
     )
+
+    mean_obj_r_runs = [mean_obj_r]
+    mean_r_runs = [mean_r]
+    benchmark_mean_return_runs = [benchmark_mean_return]
+    benchmark_test_r_runs = [benchmark_test_r]
+    benchmark_test_r_runs_std = [benchmark_test_r_std]
+    test_r_runs = [test_r]
+    test_r_runs_std = [test_r_std]
+    
+    plot_final_results(
+        mean_obj_r_runs, mean_r_runs, benchmark_mean_return_runs, test_r_runs, 
+        benchmark_test_r_runs , test_r_runs_std, benchmark_test_r_runs_std
+        )
 
     print("Done")
 
