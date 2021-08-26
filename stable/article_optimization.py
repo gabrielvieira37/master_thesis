@@ -257,9 +257,9 @@ class ParametricPortifolio():
             w_iter_constrained = constrain_weights(w_iter.copy())
             transaction_discount = compute_transaction_discount(w_iter_constrained, transaction_cost)
 
-            mean_r.append(sum(sum(w_iter*r))/time)
-            mean_constrained_r.append(sum(sum(w_iter_constrained*r))/time)
-            mean_constrained_transaction_r.append(sum(sum(w_iter_constrained*r))/time  - transaction_discount)
+            mean_r.append(sum(sum(w_iter[:,:-1]*r[:,1:]))/time)
+            mean_constrained_r.append(sum(sum(w_iter_constrained[:,:-1]*r[:,1:]))/time)
+            mean_constrained_transaction_r.append(sum(sum(w_iter_constrained[:,:-1]*r[:,1:]))/time  - transaction_discount)
 
         sol = minimize(objective, theta0, callback=callback_steps, method='BFGS')
         self.sol = sol
@@ -312,7 +312,8 @@ class ParametricPortifolio():
         #### CREATE BENCHMARK FOR TESTING
         w_benchmark_test = create_w_benchmark(number_of_stocks, time_test)
 
-        benchmark_r_test_series=pd.Series(sum(w_benchmark_test*r_test)).describe()
+        # Get weight from t and return from t+1
+        benchmark_r_test_series=pd.Series(sum(w_benchmark_test[:,:-1]*r_test[:,1:])).describe()
         benchmark_test_r = benchmark_r_test_series['mean']
         benchmark_test_r_std = benchmark_r_test_series['std']
 
@@ -327,8 +328,9 @@ class ParametricPortifolio():
         
         transaction_discount = compute_transaction_discount(w_test_constrained, transaction_cost)
 
-        r_test_series = pd.Series(sum(w_test*r_test)).describe()
-        r_test_constrained_series = pd.Series(sum(w_test_constrained*r_test)).describe()
+        # Get weight from t and return from t+1
+        r_test_series = pd.Series(sum(w_test[:,:-1]*r_test[:,1:])).describe()
+        r_test_constrained_series = pd.Series(sum(w_test_constrained[:,:-1]*r_test[:,1:])).describe()
 
         test_r = r_test_series['mean']
         test_r_std = r_test_series['std']
