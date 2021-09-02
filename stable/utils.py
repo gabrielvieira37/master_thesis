@@ -3,7 +3,11 @@
 import matplotlib.pyplot as plt
 import logging
 import numpy as np
-
+import pandas as pd
+import os
+import torch
+import torch.nn as nn
+torch.random.manual_seed(123)
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
@@ -142,3 +146,118 @@ def constrain_weights(weights):
     weights = np.where(weights>0, weights, 0)
     weights = weights/weights.sum(axis=0)
     return weights
+
+def compute_transaction_costs(data_path):
+    """
+    Compute transaction costs using volume values
+    and putting in a comission tax.
+    """
+
+    volumes = pd.read_csv(os.path.join(data_path , 'monthly_volume.csv'))
+    comission = 0.0004
+    uk_variable1 = 0.002
+    uk_variable2 = 0.01
+
+    market_cost = np.ones_like(volumes)*comission
+    market_cost.shape
+
+    x= volumes/volumes.std()
+    (T,N) = x.shape
+    x[x==0]= np.NaN
+    min_ = x.min(axis=1)
+    max_ = x.max(axis=1)
+    for t in range(T):
+        x.iloc[t] = (x.iloc[t] - min_[t])/(max_[t] - min_[t])
+    x.fillna(0, inplace=True)
+    x = x * (uk_variable1 - uk_variable2)
+
+    liq_cost = np.ones_like(x)*uk_variable2 + x
+    market_cost += liq_cost
+    market_cost = 1-market_cost
+    market_cost = market_cost
+    return market_cost
+
+
+class ParametricPortifolioNN(nn.Module):
+    def __init__(self, benchmark, return_, risk_constant, number_of_stocks):
+        super(ParametricPortifolioNN, self).__init__()
+        self.weights = nn.Linear(3,1, bias=False)
+        self.relu = nn.ReLU()
+        self.benchmark = benchmark
+        self.return_ = return_
+        self.risk_constant = risk_constant
+        self.number_of_stocks = number_of_stocks
+
+    def utility_function(self, portfolio_return):
+        """
+        CRRA Utility function
+        Parameters
+        ----------
+        risk_factor: int
+            Risk constant, increase it to become more risk averse.
+        portifolio_return: float
+            Mean return of a portifolio.
+        Returns
+        -------
+        value: float
+            Utility function value
+        """
+        value = ((1 + portfolio_return)**(1-self.risk_constant))/(1-self.risk_constant)
+        return value
+
+    def forward(self, x):
+        """
+        x -> Shape (T, N, 3)
+        """
+        x = self.relu(x)
+        x = self.weights(x).squeeze(-1) * (1/self.number_of_stocks)
+        x = x + self.benchmark
+        r = x*self.return_
+        x = torch.mean(r, -1)
+        x = self.utility_function(x)
+        x = torch.mean(x, 0)
+
+        return x , r
+
+def loss_fn(x):
+    """ Simple loss function repeating foward calculations """
+    return -x
+
+
+def convert_to_nn_variables(firm_characteristics, r, w_benchmark):
+    """
+    Convert numpy variables to torch variables
+    
+    Parameters
+    ----------
+    firm_characteristics: pd.DataFrame(float)
+        Normalized firm_characteristics
+        
+    r: np.Array(float)
+        Monthly return
+    
+    w_benchmark: np.Array(float)
+        Benchmark weights
+    
+    Returns
+    -------
+    torch_characteristics: torch.Tensor
+        Torch mapped firm characteristics
+    torch_r: torch.Tensor
+        Torch mapped Monthly return
+    torch_benchmark torch.Tensor
+        Torch mapped Benchmark weights
+    """
+    
+    nd_characteristics = np.array([
+    firm_characteristics.T.loc[(slice(None), 'me'), :],
+    firm_characteristics.T.loc[(slice(None), 'btm'), :],
+    firm_characteristics.T.loc[(slice(None), 'mom'), :],
+    ]).transpose(2,1,0)
+    
+    torch_characteristics = torch.tensor(nd_characteristics).float()
+    torch_r = torch.tensor(r.T)
+    
+    torch_benchmark = torch.tensor(w_benchmark.T)
+    
+    return torch_characteristics, torch_r, torch_benchmark
