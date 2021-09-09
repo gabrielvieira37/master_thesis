@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 torch.random.manual_seed(123)
 
 LOGGER = logging.getLogger(__name__)
@@ -209,8 +210,8 @@ class ParametricPortifolioNN(nn.Module):
         """
         x -> Shape (T, N, 3)
         """
-        x = self.relu(x)
-        x = self.weights(x).squeeze(-1) * (1/self.number_of_stocks)
+        x = F.relu(self.weights(x))
+        x = x.squeeze(-1) * (1/self.number_of_stocks)
         x = x + self.benchmark
         r = x*self.return_
         x = torch.mean(r, -1)
@@ -261,3 +262,11 @@ def convert_to_nn_variables(firm_characteristics, r, w_benchmark):
     torch_benchmark = torch.tensor(w_benchmark.T)
     
     return torch_characteristics, torch_r, torch_benchmark
+
+
+def weight_reset(m):
+    """
+    Reset neural network weights to retrain it
+    """
+    if isinstance(m, nn.Linear):
+        m.reset_parameters()
