@@ -35,7 +35,7 @@ class ParametricPortifolio():
     to adjust portifolio weights.
     """
 
-    def __init__(self, data_path, risk_constant, train_split, learning_rate, l2_regularization, epochs_size, plot_weights):
+    def __init__(self, data_path, risk_constant, train_split, val_split, learning_rate, l2_regularization, epochs_size, plot_weights):
         """
         Initialize object with data path, risk constant, transaction cost and
         the percentage of train split.
@@ -47,6 +47,7 @@ class ParametricPortifolio():
         self.data_path = data_path
         self.risk_constant = risk_constant
         self.train_split = train_split
+        self.val_split = val_split
 
         self.plot_weights = plot_weights
 
@@ -65,6 +66,8 @@ class ParametricPortifolio():
         self.nn_loss_runs = []
         self.nn_return_runs = []
         self.nn_return_runs_std = []
+        self.nn_val_return_runs = []
+        self.nn_val_return_runs_std = []
 
         # Test values
         self.benchmark_test_r_runs = []
@@ -175,7 +178,6 @@ class ParametricPortifolio():
         r = np.empty(shape=(number_of_stocks, time))
         
         characteristics_names = ["me", "btm", "mom"]
-
         for i, name in enumerate(stocks_names):
             me = me_df.get(name)
             mom = mom_df.get(name)
@@ -215,12 +217,21 @@ class ParametricPortifolio():
         """
 
 
-        epsilon = 1e-10
+        epsilon = 1e-20
+        # Feature scaling to [-1, 1]
+        firm_characteristics = (-1) + (((firm_characteristics-firm_characteristics.min()) * 2 ) /(firm_characteristics.max()-firm_characteristics.min()+epsilon))
+        
+
+        # Normalization using mean and sum of each feature to make its sum going to zero each time step.
         for name in characteristics_names:
             #Normalize firm characteristics for all stocks
-            sum_df = firm_characteristics.T.loc[(slice(None), name), :].sum()
+            # sum_df = firm_characteristics.T.loc[(slice(None), name), :].sum()
             firm_characteristics.T.loc[(slice(None), name), :] -= firm_characteristics.T.loc[(slice(None), name), :].mean()
-            firm_characteristics.T.loc[(slice(None), name), :] /= (sum_df + epsilon)
+            # firm_characteristics.T.loc[(slice(None), name), :] /= (sum_df + epsilon)
+            # max_ = firm_characteristics.T.loc[(slice(None), name), :].max()
+            # min_ = firm_characteristics.T.loc[(slice(None), name), :].min()
+            # firm_characteristics.T.loc[(slice(None), name), :] -= firm_characteristics.T.loc[(slice(None), name), :].mean()
+            # firm_characteristics.T.loc[(slice(None), name), :] /= (max_ - min_ + epsilon)
         LOGGER.info("Normalized firm characteristics")
         return firm_characteristics
     
@@ -317,8 +328,9 @@ class ParametricPortifolio():
         LOGGER.info("Finished optimization step.")
 
 
-    def nn_optimizer(self, torch_characteristics, torch_r, torch_benchmark, number_of_stocks):
+    def nn_optimizer(self, torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val):
         """
+        Optimize and fing theta using a neural network. Theta is the weights of the optimized NN.
         """
         LOGGER.info("Start neural network optimization.")
         portifolio = ParametricPortifolioNN(torch_benchmark[:-1], torch_r[1:], self.risk_constant, number_of_stocks)
@@ -327,27 +339,45 @@ class ParametricPortifolio():
         learning_rate = self.learning_rate
         l2_regularization = self.l2_regularization
         epochs_size = self.epochs_size
-        
+        torch_r_val = torch_r_val[1:]
+
         opt = torch.optim.Adam(portifolio.parameters(), lr=learning_rate, weight_decay=l2_regularization)
         loss_values = []
         return_values_mean = []
+        val_return_values_mean = []
         return_values_std = []
-        for _ in range(epochs_size):
+        val_return_values_std = []
+        for i in range(epochs_size):
             opt.zero_grad()
             value, r_ = portifolio(torch_characteristics[:-1])
             loss = loss_fn(value)
             loss_values.append(loss.item())
             r_p = torch.sum(r_,-1)
-            return_values_mean.append( torch.mean(r_p).detach().numpy())
-            return_values_std.append( torch.std(r_p).detach().numpy())
+            mean_r_p = torch.mean(r_p).detach().numpy()
+            std_r_p = torch.std(r_p).detach().numpy()
+            
+            w_val = portifolio.weights(torch_characteristics_val[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark_val[:-1]
+            mean_val_r = torch.mean(torch.sum((w_val*torch_r_val), dim=1)).detach().numpy()
+            std_val_r = torch.std(torch.sum((w_val*torch_r_val), dim=1)).detach().numpy()
+
+            val_return_values_mean.append(mean_val_r)
+            val_return_values_std.append(std_val_r)
+            
+            if i%100==0:
+                theta = portifolio.weights.state_dict()['weight'].detach().numpy()
+                LOGGER.debug(f"i:{i}, theta i: {theta}, f(theta):{loss.item()},  Return_mean:{mean_r_p}, Return_std{std_r_p}")
+
+            return_values_mean.append(mean_r_p)
+            return_values_std.append(std_r_p)
             loss.backward()
             opt.step()
         
         theta = portifolio.weights.state_dict()['weight'].detach().numpy()
-        LOGGER.debug(f"Neural Network -> theta:{theta}, f(theta):{loss.item()}")
         self.nn_loss = loss_values
         self.nn_return = return_values_mean
         self.nn_return_std = return_values_std
+        self.nn_val_return = val_return_values_mean
+        self.nn_val_return_std = val_return_values_std
 
         optimized_nn = portifolio
         return optimized_nn
@@ -504,7 +534,7 @@ class ParametricPortifolio():
         """
         LOGGER.info("Started experiment.")
         np.random.seed(123)
-        for train, test in indexes_list:
+        for train, val, test in indexes_list:
             LOGGER.info("Splitting data into train and test set.")
             theta0 = np.random.rand(1, 3)
             
@@ -513,6 +543,12 @@ class ParametricPortifolio():
             train_mom = self.lreturn.loc[train]
             train_return = self.monthly_return.loc[train]
             self.train_market_cost = self.market_cost.loc[train]
+
+            val_btm = self.book_to_mkt_ratio.loc[val]
+            val_me = self.mcap.loc[val]
+            val_mom = self.lreturn.loc[val]
+            val_return = self.monthly_return.loc[val]
+            self.val_market_cost = self.market_cost.loc[val]
             
             test_btm = self.book_to_mkt_ratio.loc[test]
             test_me = self.mcap.loc[test]
@@ -522,13 +558,18 @@ class ParametricPortifolio():
 
             #### TRAINING CHARACTERISTICS
             firm_characteristics, r, time, number_of_stocks = self.create_characteristics(train_me, train_mom, train_btm, train_return)
+            firm_characteristics_val, r_val, time_val, number_of_stocks = self.create_characteristics(val_me, val_mom, val_btm, val_return)
 
             ### Creating weights to a benchmark portifolio using uniform weighted returns
             w_benchmark = create_w_benchmark(number_of_stocks, time)
+            w_benchmark_val = create_w_benchmark(number_of_stocks, time_val)
 
             torch_characteristics, torch_r, torch_benchmark  = convert_to_nn_variables(firm_characteristics, r, w_benchmark)
+            torch_characteristics_val, torch_r_val, torch_benchmark_val  = convert_to_nn_variables(
+                firm_characteristics_val, r_val, w_benchmark_val)
 
-            optimized_nn = self.nn_optimizer(torch_characteristics, torch_r, torch_benchmark, number_of_stocks)
+            optimized_nn = self.nn_optimizer(
+                torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val)
 
             # ### CREATING RETURNS TO COMPARE, OPTIMIZATION STEP
             benchmark_mean_return = np.mean(np.sum(w_benchmark[:,:-1]*r[:,1:], axis=0))
@@ -555,6 +596,9 @@ class ParametricPortifolio():
             self.nn_loss_runs.append(self.nn_loss)
             self.nn_return_runs.append(self.nn_return)
             self.nn_return_runs_std.append(self.nn_return_std)
+
+            self.nn_val_return_runs.append(self.nn_val_return )
+            self.nn_val_return_runs_std.append(self.nn_val_return_std)
 
             # Test step
             self.benchmark_test_r_runs.append(self.benchmark_test_r)
@@ -674,6 +718,7 @@ class ParametricPortifolio():
         for run, mean_r in enumerate(self.nn_return_runs):
             x = range(len(mean_r))
             plt.plot(x, mean_r, label=f'Optimized return, Run:{run+1}', c=colors[run])
+            plt.plot(x, self.nn_val_return_runs[run], label=f'Optimized validation return, Run:{run+1}', c=colors[run+1])
         plt.ylabel("Mean return")
         plt.xlabel("Epochs")
         plt.legend()
@@ -782,8 +827,8 @@ class ParametricPortifolio():
         total_size = self.monthly_return.shape[0]
 
         indexes_list = []
-        for train_percentage in self.train_split:
-            idxs_list, = data_split(total_size, train_percentage)
+        for train_percentage, val_percentage in zip(self.train_split, self.val_split):
+            idxs_list, = data_split(total_size, train_percentage, val_percentage)
             indexes_list.append(idxs_list)
         
         self.create_experiment(indexes_list)
@@ -797,12 +842,13 @@ def main():
     data_path = "../data/"
     risk_constant = 5
     np.random.seed(123)
-    # train_split = [0.7]
-    train_split = np.random.rand(10)
+    train_split = [0.6]
+    val_split = [0.2]
+    # train_split = np.random.rand(10)
     single_holdout = ParametricPortifolio(
         data_path=data_path, risk_constant=risk_constant,
-        train_split=train_split, learning_rate=0.01, 
-        l2_regularization=1e-2, epochs_size=500, plot_weights=False
+        train_split=train_split, val_split=val_split, learning_rate=0.01, 
+        l2_regularization=3e-3, epochs_size=1000, plot_weights=False
         )
     single_holdout._start()
 
