@@ -71,7 +71,7 @@ def create_w_benchmark(number_of_stocks, time):
     return w_benchmark
 
 
-def data_split(size, train_percentage):
+def data_split(size, train_percentage, val_percentage):
     """
     Define indexes for splitted train and test set using a split percentage.
 
@@ -89,10 +89,12 @@ def data_split(size, train_percentage):
 
     """
     train_size = int(size*train_percentage)
-    train_index =np.arange(train_size) 
-    test_index = np.arange(start=train_size, stop=size)
-    indexes_list = [(train_index, test_index)]
-    LOGGER.info(f'Train size: {train_size}, test size: {size-train_size}')
+    val_end_split = int(size*(train_percentage+val_percentage))
+    train_index =np.arange(train_size)
+    val_index = np.arange(start=train_size, stop=val_end_split)
+    test_index = np.arange(start=val_end_split, stop=size)
+    indexes_list = [(train_index, val_index, test_index)]
+    LOGGER.info(f'Train size: {train_size}, val size: {val_end_split-train_size}, test size: {size-val_end_split}')
     return indexes_list
 
 
@@ -182,6 +184,7 @@ def compute_transaction_costs(data_path):
 class ParametricPortifolioNN(nn.Module):
     def __init__(self, benchmark, return_, risk_constant, number_of_stocks):
         super(ParametricPortifolioNN, self).__init__()
+        # self.first_layer = nn.Linear(3,3)
         self.weights = nn.Linear(3,1, bias=False)
         self.relu = nn.ReLU()
         self.benchmark = benchmark
@@ -210,6 +213,7 @@ class ParametricPortifolioNN(nn.Module):
         """
         x -> Shape (T, N, 3)
         """
+        # x = F.relu(self.first_layer(x))
         x = F.relu(self.weights(x))
         x = x.squeeze(-1) * (1/self.number_of_stocks)
         x = x + self.benchmark

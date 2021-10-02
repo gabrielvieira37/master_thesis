@@ -57,6 +57,7 @@ class ParametricPortifolio():
 
         # Train values
         self.mean_obj_r_runs = []
+        self.mean_obj_r_val_runs = []
         self.mean_r_runs = []
         self.mean_constrained_r_runs = []
         self.mean_constrained_transaction_r_runs = []
@@ -66,6 +67,8 @@ class ParametricPortifolio():
         self.nn_loss_runs = []
         self.nn_return_runs = []
         self.nn_return_runs_std = []
+
+        self.nn_val_loss_runs = []
         self.nn_val_return_runs = []
         self.nn_val_return_runs_std = []
 
@@ -236,7 +239,7 @@ class ParametricPortifolio():
         return firm_characteristics
     
 
-    def optimizing_step(self, firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark):
+    def optimizing_step(self, firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark, firm_characteristics_val, r_val, time_val, w_benchmark_val):
         """
         Find the coefficient theta that best maps the firm characteristics and the returns.
 
@@ -291,7 +294,9 @@ class ParametricPortifolio():
             return -np.mean(np.sum(utility_function(risk_constant, w[:,:-1]*r[:,1:]), axis=0))
         
         mean_obj_r = []
+        mean_obj_r_val = []
         mean_r = []
+        mean_r_val = []
         mean_constrained_r = []
         mean_constrained_transaction_r = []
         
@@ -309,11 +314,17 @@ class ParametricPortifolio():
             mean_obj_r.append(-objective(thetaI))
 
             w_iter = np.empty(shape=(number_of_stocks, time))
+            w_iter_val = np.empty(shape=(number_of_stocks, time_val))
+            
             for i in range(number_of_stocks):
                 w_iter[i] = w_benchmark[i] + (1/number_of_stocks)*thetaI.dot(firm_characteristics[i].copy().T)
+                w_iter_val[i] = w_benchmark_val[i] + (1/number_of_stocks)*thetaI.dot(firm_characteristics_val[i].copy().T)
             w_iter_constrained = constrain_weights(w_iter.copy())
 
+            obj_val = np.mean(np.sum(utility_function(risk_constant, w_iter_val[:,:-1]*r_val[:,1:]), axis=0))
+            mean_obj_r_val.append(obj_val)
 
+            mean_r_val.append(np.mean(np.sum(w_iter_val[:,:-1]*r_val[:,1:], axis=0)))   
             mean_r.append(np.mean(np.sum(w_iter[:,:-1]*r[:,1:], axis=0)))
             mean_constrained_r.append(np.mean(np.sum(w_iter_constrained[:,:-1]*r[:,1:] , axis=0 )))
             # import pdb; pdb.set_trace()
@@ -322,7 +333,9 @@ class ParametricPortifolio():
         sol = minimize(objective, theta0, callback=callback_steps, method='BFGS')
         self.sol = sol
         self.mean_obj_r  = mean_obj_r
+        self.mean_obj_r_val = mean_obj_r_val
         self.mean_r = mean_r
+        self.mean_r_val = mean_r_val
         self.mean_constrained_r = mean_constrained_r
         self.mean_constrained_transaction_r = mean_constrained_transaction_r
         LOGGER.info("Finished optimization step.")
@@ -334,6 +347,7 @@ class ParametricPortifolio():
         """
         LOGGER.info("Start neural network optimization.")
         portifolio = ParametricPortifolioNN(torch_benchmark[:-1], torch_r[1:], self.risk_constant, number_of_stocks)
+        portifolio_val = ParametricPortifolioNN(torch_benchmark_val[:-1], torch_r_val[1:], self.risk_constant, number_of_stocks)
         portifolio.apply(weight_reset)
 
         learning_rate = self.learning_rate
@@ -342,11 +356,14 @@ class ParametricPortifolio():
         torch_r_val = torch_r_val[1:]
 
         opt = torch.optim.Adam(portifolio.parameters(), lr=learning_rate, weight_decay=l2_regularization)
+
         loss_values = []
         return_values_mean = []
-        val_return_values_mean = []
         return_values_std = []
-        val_return_values_std = []
+
+        loss_values_val =[]
+        return_values_mean_val = []
+        return_values_std_val = []
         for i in range(epochs_size):
             opt.zero_grad()
             value, r_ = portifolio(torch_characteristics[:-1])
@@ -355,13 +372,17 @@ class ParametricPortifolio():
             r_p = torch.sum(r_,-1)
             mean_r_p = torch.mean(r_p).detach().numpy()
             std_r_p = torch.std(r_p).detach().numpy()
-            
-            w_val = portifolio.weights(torch_characteristics_val[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark_val[:-1]
-            mean_val_r = torch.mean(torch.sum((w_val*torch_r_val), dim=1)).detach().numpy()
-            std_val_r = torch.std(torch.sum((w_val*torch_r_val), dim=1)).detach().numpy()
 
-            val_return_values_mean.append(mean_val_r)
-            val_return_values_std.append(std_val_r)
+            portifolio_val.weights = portifolio.weights
+            value_val, r_val = portifolio_val(torch_characteristics_val[:-1])
+            loss_val = loss_fn(value_val)
+            r_p_val = torch.sum(r_val,-1)
+            mean_r_p_val = torch.mean(r_p_val).detach().numpy()
+            std_r_p_val = torch.std(r_p_val).detach().numpy()
+
+            return_values_mean_val.append(mean_r_p_val)
+            return_values_std_val.append(std_r_p_val)
+            loss_values_val.append(loss_val.item())
             
             if i%100==0:
                 theta = portifolio.weights.state_dict()['weight'].detach().numpy()
@@ -376,8 +397,11 @@ class ParametricPortifolio():
         self.nn_loss = loss_values
         self.nn_return = return_values_mean
         self.nn_return_std = return_values_std
-        self.nn_val_return = val_return_values_mean
-        self.nn_val_return_std = val_return_values_std
+    
+        self.nn_val_loss = loss_values_val
+        self.nn_val_return = return_values_mean_val
+        self.nn_val_return_std = return_values_std_val
+    
 
         optimized_nn = portifolio
         return optimized_nn
@@ -575,7 +599,7 @@ class ParametricPortifolio():
             benchmark_mean_return = np.mean(np.sum(w_benchmark[:,:-1]*r[:,1:], axis=0))
             
             # Creating optimizing solution sol
-            self.optimizing_step(firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark)
+            self.optimizing_step(firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark, firm_characteristics_val, r_val, time_val, w_benchmark_val)
 
             sol_theta = self.sol.x
             # sol_theta = ''
@@ -586,6 +610,7 @@ class ParametricPortifolio():
             
             # Optimization step
             self.mean_obj_r_runs.append(self.mean_obj_r)
+            self.mean_obj_r_val_runs.append(self.mean_obj_r_val)
             self.mean_r_runs.append(self.mean_r)
             self.mean_constrained_r_runs.append(self.mean_constrained_r)
             self.mean_constrained_transaction_r_runs.append(self.mean_constrained_transaction_r)
@@ -597,6 +622,7 @@ class ParametricPortifolio():
             self.nn_return_runs.append(self.nn_return)
             self.nn_return_runs_std.append(self.nn_return_std)
 
+            self.nn_val_loss_runs.append(self.nn_val_loss)
             self.nn_val_return_runs.append(self.nn_val_return )
             self.nn_val_return_runs_std.append(self.nn_val_return_std)
 
@@ -690,6 +716,7 @@ class ParametricPortifolio():
         for run, mean_obj_r in enumerate(mean_obj_r_runs):
             x = range(len(mean_obj_r))
             plt.plot(x, mean_obj_r, label=f'Objective return, Run:{run+1}', c=colors[run])
+            plt.plot(x, self.mean_obj_r_val_runs[run], label=f'Objective validation return, Run:{run+1}', c=colors[run+1])
         plt.xlabel('Iteration step')
         plt.ylabel('Objective return')
         plt.legend()
@@ -731,6 +758,7 @@ class ParametricPortifolio():
         for run, loss in enumerate(self.nn_loss_runs):
             x = range(len(loss))
             plt.plot(x, loss, label=f'Objective loss, Run:{run+1}', c=colors[run])
+            plt.plot(x, self.nn_val_loss_runs[run], label=f'Objective validation loss, Run:{run+1}', c=colors[run+1])
         plt.ylabel("Objective loss")
         plt.xlabel("Epochs")
         plt.legend()
@@ -848,7 +876,7 @@ def main():
     single_holdout = ParametricPortifolio(
         data_path=data_path, risk_constant=risk_constant,
         train_split=train_split, val_split=val_split, learning_rate=0.01, 
-        l2_regularization=3e-3, epochs_size=1000, plot_weights=False
+        l2_regularization=1e-4, epochs_size=500, plot_weights=False
         )
     single_holdout._start()
 
