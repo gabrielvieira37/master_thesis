@@ -274,3 +274,11 @@ def weight_reset(m):
     """
     if isinstance(m, nn.Linear):
         m.reset_parameters()
+
+def strict_decreasing(loss_values):
+    return all(x>y for x,y in zip(loss_values, loss_values[1:]))
+
+
+def strict_increasing(loss_values):
+    return all(x<y for x,y in zip(loss_values, loss_values[1:]))
+    

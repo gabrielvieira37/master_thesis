@@ -16,7 +16,8 @@ torch.random.manual_seed(123)
 from utils import (
     data_split, create_w_benchmark, plot_splitted_data,
     utility_function, constrain_weights, compute_transaction_costs,
-    ParametricPortifolioNN, loss_fn, convert_to_nn_variables, weight_reset
+    ParametricPortifolioNN, loss_fn, convert_to_nn_variables, weight_reset,
+    strict_decreasing, strict_increasing
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class ParametricPortifolio():
     to adjust portifolio weights.
     """
 
-    def __init__(self, data_path, risk_constant, train_split, val_split, learning_rate, l2_regularization, epochs_size, plot_weights):
+    def __init__(self, data_path, risk_constant, train_split, val_split, learning_rate, l2_regularization, epochs_size, patience, plot_weights):
         """
         Initialize object with data path, risk constant, transaction cost and
         the percentage of train split.
@@ -48,7 +49,7 @@ class ParametricPortifolio():
         self.risk_constant = risk_constant
         self.train_split = train_split
         self.val_split = val_split
-
+        self.patience = patience
         self.plot_weights = plot_weights
 
         self.learning_rate = learning_rate
@@ -96,7 +97,7 @@ class ParametricPortifolio():
         self.test_r_nn_constrained_transaction_runs = []
         self.test_r_nn_constrained_transaction_runs_std =[]
 
-        self.weights_computed = {'optimized':[], 'optimized_constrained':[]}
+        self.weights_computed = {'optimized':[], 'optimized_constrained':[], 'nn_optimized':[], 'nn_optimized_constrained':[]}
 
     # TO-DO: Change it to load any number of characteristics
     def load_data(self):
@@ -354,6 +355,7 @@ class ParametricPortifolio():
         l2_regularization = self.l2_regularization
         epochs_size = self.epochs_size
         torch_r_val = torch_r_val[1:]
+        patience = self.patience
 
         opt = torch.optim.Adam(portifolio.parameters(), lr=learning_rate, weight_decay=l2_regularization)
 
@@ -383,6 +385,7 @@ class ParametricPortifolio():
             return_values_mean_val.append(mean_r_p_val)
             return_values_std_val.append(std_r_p_val)
             loss_values_val.append(loss_val.item())
+                
             
             if i%100==0:
                 theta = portifolio.weights.state_dict()['weight'].detach().numpy()
@@ -392,6 +395,18 @@ class ParametricPortifolio():
             return_values_std.append(std_r_p)
             loss.backward()
             opt.step()
+
+            ## Early stopping
+            if len(loss_values) > patience:
+                comparison_loss = loss_values[-patience:]
+                comparison_loss_val = loss_values_val[-patience:]
+
+                logic_loss = strict_decreasing(comparison_loss)
+                logic_loss_val = strict_increasing(comparison_loss_val)
+
+                # import pdb; pdb.set_trace()
+                if logic_loss==True and logic_loss_val==True:
+                    break
         
         theta = portifolio.weights.state_dict()['weight'].detach().numpy()
         self.nn_loss = loss_values
@@ -456,7 +471,11 @@ class ParametricPortifolio():
         w_test_nn = optimized_nn.weights(torch_characteristics_test[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark_test[:-1]
         w_test_nn_constrained = torch.Tensor(constrain_weights(w_test_nn.detach().numpy().T).T)
         w_test_nn_constrained_transaction = w_test_nn_constrained*torch.Tensor(self.test_market_cost[:-1].to_numpy())
+        
+        self.weights_computed['nn_optimized'].append(w_test_nn.detach().numpy().T)
+        self.weights_computed['nn_optimized_constrained'].append(w_test_nn_constrained.detach().numpy().T)
 
+        import pdb; pdb.set_trace()
         self.test_r_nn = torch.mean(torch.sum((w_test_nn*torch_r_test), dim=1)).detach().numpy()
         self.test_r_nn_std = torch.std(torch.sum((w_test_nn*torch_r_test), dim=1)).detach().numpy()
         self.test_r_nn_constrained = torch.mean(torch.sum((w_test_nn_constrained*torch_r_test), dim=1)).detach().numpy()
@@ -861,9 +880,9 @@ class ParametricPortifolio():
         
         self.create_experiment(indexes_list)
 
-        experiment_label = "OO_experiment_holdout"
+        experiment_label = "OO_experiment_holdout_best_loss_patience"
         self.plot_final_results(experiment_label)
-
+        # import pdb; pdb.set_trace()
         LOGGER.info("Done")
 
 def main():
@@ -875,8 +894,8 @@ def main():
     # train_split = np.random.rand(10)
     single_holdout = ParametricPortifolio(
         data_path=data_path, risk_constant=risk_constant,
-        train_split=train_split, val_split=val_split, learning_rate=0.01, 
-        l2_regularization=1e-4, epochs_size=500, plot_weights=False
+        train_split=train_split, val_split=val_split, learning_rate=0.027971, 
+        l2_regularization=7.851760e-08, epochs_size=1640, patience=5, plot_weights=True
         )
     single_holdout._start()
 
