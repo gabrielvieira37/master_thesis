@@ -19,6 +19,21 @@ formatter = logging.Formatter(format_string)
 handler.setFormatter(formatter)
 LOGGER.addHandler(handler)
 
+def placeholder(w):
+    permited_leverage = -0.3
+    must_have_positive_weights = 1.3
+
+    total_negative = (w*(w<0)).sum(axis=1) 
+    total_positive = (w*(w>0)).sum(axis=1)
+
+    capped_negative_weights = ((w.T/total_negative)*permited_leverage).T
+    capped_positive_weights = ((w.T/total_positive)*must_have_positive_weights).T
+
+    negative_mask = w<0
+    positive_mask = w>0
+    new_w = capped_negative_weights*negative_mask+capped_positive_weights*positive_mask
+    return new_w
+
 def plot_splitted_data(characteristic_df, characteristic_name, indexes_list, stock_name):
     """
     Plot train and test splitted data and save it to a jpg file in the folder.
