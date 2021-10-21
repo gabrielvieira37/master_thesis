@@ -11,7 +11,11 @@ import logging
 from matplotlib import cm
 import torch
 import torch.nn as nn
+from ray import tune
+from ray.tune.suggest.bayesopt import BayesOptSearch
+
 torch.random.manual_seed(123)
+os.environ['RAY_DISABLE_IMPORT_WARNING'] = '1'
 
 from utils import (
     data_split, create_w_benchmark, plot_splitted_data,
@@ -341,8 +345,63 @@ class ParametricPortifolio():
         self.mean_constrained_transaction_r = mean_constrained_transaction_r
         LOGGER.info("Finished optimization step.")
 
+    def nn_hyperparameter_optimizer(self, config):
+        """Optimize hyperparameters using baysean optimization"""
 
-    def nn_optimizer(self, torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val):
+        
+        torch_characteristics=self.torch_characteristics
+        torch_r=self.torch_r
+        torch_benchmark=self.torch_benchmark
+        number_of_stocks=self.number_of_stocks
+        torch_characteristics_val = self.torch_characteristics_val
+        torch_r_val = self.torch_r_val
+        torch_benchmark_val = self.torch_benchmark_val
+
+        optimized_nn = self.nn_optimizer(
+            torch_characteristics, torch_r, torch_benchmark, number_of_stocks, 
+            torch_characteristics_val, torch_r_val, torch_benchmark_val, config
+            )
+        
+        # Last epoch results
+        mean_loss = self.nn_val_loss[-1]
+        mean_return =  self.nn_val_return[-1]
+        mean_std = self.nn_val_return_std[-1]
+
+        tune.report(
+            mean_return=mean_return,
+            mean_sharpe_ratio=mean_return/mean_std,
+            mean_loss=mean_loss
+        )
+
+    def get_best_hyperparameter_config(self):
+        """Get best hyperparamter config using hyperparamter optimization"""
+
+        LOGGER.info("Started NN hyperparameter optimization.")
+        
+        config = {        
+            'learning_rate':tune.uniform(0.01, 0.1),
+            'l2_regularization':tune.uniform(1e-7, 1e-2),
+            'epochs_size':tune.uniform(500, 3000),
+            'adam_betha1':tune.uniform(0.85, 0.95),
+            'adam_betha2':tune.uniform(0.99, 0.999),
+            'patience':tune.uniform(2, 10),
+        }
+
+        reporter = tune.CLIReporter(max_progress_rows=10)
+        reporter.add_metric_column("mean_return")
+        reporter.add_metric_column("mean_sharpe_ratio")
+        bayesopt = BayesOptSearch(verbose=0)
+        analysis = tune.run(
+            self.nn_hyperparameter_optimizer, config=config, progress_reporter=reporter, search_alg=bayesopt,
+            num_samples=100, metric="mean_loss", mode="min", verbose=0
+        )
+
+        LOGGER.info("Finished NN hyperparameter optimization.")
+        # import pdb; pdb.set_trace()
+        best_config =  analysis.get_best_config(metric='mean_loss', mode='min')
+        return best_config
+
+    def nn_optimizer(self, torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val, config):
         """
         Optimize and fing theta using a neural network. Theta is the weights of the optimized NN.
         """
@@ -351,14 +410,26 @@ class ParametricPortifolio():
         portifolio_val = ParametricPortifolioNN(torch_benchmark_val[:-1], torch_r_val[1:], self.risk_constant, number_of_stocks)
         portifolio.apply(weight_reset)
 
-        learning_rate = self.learning_rate
-        l2_regularization = self.l2_regularization
-        epochs_size = self.epochs_size
+        learning_rate = config['learning_rate']
+        l2_regularization = config['l2_regularization']
+        epochs_size = config['epochs_size']
+        epochs_size = int(epochs_size)
+
+        adam_betha1 = config['adam_betha1']
+        adam_betha2 = config['adam_betha2']
+        patience = config['patience']
+        patience = int(patience)
+
+        # learning_rate = self.learning_rate
+        # l2_regularization = self.l2_regularization
+        # epochs_size = self.epochs_size
+        # patience = self.patience
         torch_r_val = torch_r_val[1:]
-        patience = self.patience
+        
+        opt = torch.optim.Adam(portifolio.parameters(), betas=(adam_betha1, adam_betha2) , lr=learning_rate, weight_decay=l2_regularization)
 
-        opt = torch.optim.Adam(portifolio.parameters(), lr=learning_rate, weight_decay=l2_regularization)
-
+        patience_counter = 0
+        min_loss_val = 0
         loss_values = []
         return_values_mean = []
         return_values_std = []
@@ -396,17 +467,38 @@ class ParametricPortifolio():
             loss.backward()
             opt.step()
 
-            ## Early stopping
-            if len(loss_values) > patience:
-                comparison_loss = loss_values[-patience:]
-                comparison_loss_val = loss_values_val[-patience:]
+            # New Early stopping
+            if len(loss_values_val)==1:
+                min_loss_val = loss_values_val[-1]
+            else:
+                if min_loss_val > loss_values_val[-1]:
+                    min_loss_val = loss_values_val[-1]
+                    patience_counter=0
+                else:
+                    patience_counter+=1
 
-                logic_loss = strict_decreasing(comparison_loss)
-                logic_loss_val = strict_increasing(comparison_loss_val)
+            if patience_counter == patience:
+                break
+            
+            # If the difference between validation loss and training loss is greater than 50% break
+            relative_diff_loss =  (loss_values[-1] - loss_values_val[-1])/loss_values_val[-1]
+            if i%50==0:
+                LOGGER.debug(f"Relative difference of validation and training loss: {relative_diff_loss}")
+            if abs(relative_diff_loss) > 0.8:
+                break
 
-                # import pdb; pdb.set_trace()
-                if logic_loss==True and logic_loss_val==True:
-                    break
+            # ## Early stopping
+            # if len(loss_values) > patience:
+                
+            #     comparison_loss = loss_values[-patience:]
+            #     comparison_loss_val = loss_values_val[-patience:]
+
+            #     logic_loss = strict_decreasing(comparison_loss)
+            #     logic_loss_val = strict_increasing(comparison_loss_val)
+
+            #     # import pdb; pdb.set_trace()
+            #     if logic_loss==True and logic_loss_val==True:
+            #         break
         
         theta = portifolio.weights.state_dict()['weight'].detach().numpy()
         self.nn_loss = loss_values
@@ -483,6 +575,10 @@ class ParametricPortifolio():
         self.test_r_nn_constrained_transaction = torch.mean(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
         self.test_r_nn_constrained_transaction_std = torch.std(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
 
+        leverage_mask = w_test_nn<0
+        leverage = (w_test_nn*leverage_mask).sum(axis=1)
+        min_values, min_idxs = w_test_nn.min(axis=1)
+        max_values, max_idxs = w_test_nn.max(axis=1)
 
         # Get weight from t and return from t+1
         benchmark_r_test_series=pd.Series(np.sum(w_benchmark_test[:,:-1]*r_test[:,1:], axis=0)).describe()
@@ -611,8 +707,28 @@ class ParametricPortifolio():
             torch_characteristics_val, torch_r_val, torch_benchmark_val  = convert_to_nn_variables(
                 firm_characteristics_val, r_val, w_benchmark_val)
 
+            ## Using it to be able to set those parameters inside hyperparameter optmization
+            self.torch_characteristics = torch_characteristics
+            self.torch_r = torch_r
+            self.torch_benchmark = torch_benchmark
+            self.number_of_stocks = number_of_stocks
+            self.torch_characteristics_val = torch_characteristics_val
+            self.torch_r_val = torch_r_val 
+            self.torch_benchmark_val = torch_benchmark_val
+
+            best_config = self.get_best_hyperparameter_config()
+
+            # best_config = {
+            #     'learning_rate':self.learning_rate,
+            #     'l2_regularization':self.l2_regularization,
+            #     'epochs_size':self.epochs_size,
+            #     'adam_betha1':0.9,
+            #     'adam_betha2':0.999,
+            #     'patience':self.patience,
+            # }
+
             optimized_nn = self.nn_optimizer(
-                torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val)
+                torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val, best_config)
 
             # ### CREATING RETURNS TO COMPARE, OPTIMIZATION STEP
             benchmark_mean_return = np.mean(np.sum(w_benchmark[:,:-1]*r[:,1:], axis=0))
@@ -895,7 +1011,7 @@ def main():
     single_holdout = ParametricPortifolio(
         data_path=data_path, risk_constant=risk_constant,
         train_split=train_split, val_split=val_split, learning_rate=0.027971, 
-        l2_regularization=7.851760e-08, epochs_size=1640, patience=5, plot_weights=True
+        l2_regularization=7.851760e-08, epochs_size=2000, patience=5, plot_weights=True
         )
     single_holdout._start()
 
