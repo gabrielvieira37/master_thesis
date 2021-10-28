@@ -19,15 +19,15 @@ formatter = logging.Formatter(format_string)
 handler.setFormatter(formatter)
 LOGGER.addHandler(handler)
 
-def placeholder(w):
+def constrain_weights(w):
     permited_leverage = -0.3
     must_have_positive_weights = 1.3
 
-    total_negative = (w*(w<0)).sum(axis=1) 
-    total_positive = (w*(w>0)).sum(axis=1)
+    total_negative = (w*(w<0)).sum(axis=0) 
+    total_positive = (w*(w>0)).sum(axis=0)
 
-    capped_negative_weights = ((w.T/total_negative)*permited_leverage).T
-    capped_positive_weights = ((w.T/total_positive)*must_have_positive_weights).T
+    capped_negative_weights = ((w/total_negative)*permited_leverage)
+    capped_positive_weights = ((w/total_positive)*must_have_positive_weights)
 
     negative_mask = w<0
     positive_mask = w>0
@@ -147,7 +147,7 @@ def utility_function(risk_factor, portfolio_return):
     return value
 
 # TO-DO: handle multiple manners to constrain weights
-def constrain_weights(weights):
+def constrain_weights_hard(weights):
     """
     Constrain weights to be nonnegative.
 
