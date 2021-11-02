@@ -26,8 +26,17 @@ def constrain_weights(w):
     total_negative = (w*(w<0)).sum(axis=0) 
     total_positive = (w*(w>0)).sum(axis=0)
 
+    # If total negative or positive of each time doesn't have any samples we will
+    # have infinity values, so to avoid this we set them to 0
     capped_negative_weights = ((w/total_negative)*permited_leverage)
+    capped_negative_weights[capped_negative_weights==np.inf] = 0
+    capped_negative_weights[capped_negative_weights==-np.inf] = 0
+    
     capped_positive_weights = ((w/total_positive)*must_have_positive_weights)
+    capped_positive_weights[capped_positive_weights==np.inf] = 0
+    capped_positive_weights[capped_positive_weights==-np.inf] = 0
+
+    # import pdb; pdb.set_trace()
 
     negative_mask = w<0
     positive_mask = w>0
