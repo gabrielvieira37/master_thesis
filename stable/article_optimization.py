@@ -60,6 +60,10 @@ class ParametricPortifolio():
         self.l2_regularization = l2_regularization
         self.epochs_size = epochs_size
 
+        self.training = True
+        self.mean_mean = {}
+        self.mean_std = {}
+
         # Train values
         self.mean_obj_r_runs = []
         self.mean_obj_r_val_runs = []
@@ -227,19 +231,25 @@ class ParametricPortifolio():
 
         epsilon = 1e-20
         # Feature scaling to [-1, 1]
-        firm_characteristics = (-1) + (((firm_characteristics-firm_characteristics.min()) * 2 ) /(firm_characteristics.max()-firm_characteristics.min()+epsilon))
+        # firm_characteristics = (-1) + (((firm_characteristics-firm_characteristics.min()) * 2 ) /(firm_characteristics.max()-firm_characteristics.min()+epsilon))
         
 
         # Normalization using mean and sum of each feature to make its sum going to zero each time step.
+        # Normalize within cross-section
+        LOGGER.info(f"IsTraining: {self.training}")
         for name in characteristics_names:
             #Normalize firm characteristics for all stocks
-            # sum_df = firm_characteristics.T.loc[(slice(None), name), :].sum()
-            firm_characteristics.T.loc[(slice(None), name), :] -= firm_characteristics.T.loc[(slice(None), name), :].mean()
-            # firm_characteristics.T.loc[(slice(None), name), :] /= (sum_df + epsilon)
-            # max_ = firm_characteristics.T.loc[(slice(None), name), :].max()
-            # min_ = firm_characteristics.T.loc[(slice(None), name), :].min()
-            # firm_characteristics.T.loc[(slice(None), name), :] -= firm_characteristics.T.loc[(slice(None), name), :].mean()
-            # firm_characteristics.T.loc[(slice(None), name), :] /= (max_ - min_ + epsilon)
+            if self.training == True:
+                mean_mean = firm_characteristics.T.loc[(slice(None), name), :].mean().mean()
+                mean_std = firm_characteristics.T.loc[(slice(None), name), :].std().mean()
+                self.mean_mean[name] = mean_mean
+                self.mean_std[name] = mean_std
+
+            mean_mean = self.mean_mean[name]
+            mean_std = self.mean_std[name]
+
+            firm_characteristics.T.loc[(slice(None), name), :] -= mean_mean
+            firm_characteristics.T.loc[(slice(None), name), :] /= mean_std
         LOGGER.info("Normalized firm characteristics")
         return firm_characteristics
     
@@ -399,6 +409,7 @@ class ParametricPortifolio():
         LOGGER.info("Finished NN hyperparameter optimization.")
         # import pdb; pdb.set_trace()
         best_config =  analysis.get_best_config(metric='mean_loss', mode='min')
+        LOGGER.info(f"Best NN config: {best_config}")
         return best_config
 
     def nn_optimizer(self, torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val, config):
@@ -420,10 +431,6 @@ class ParametricPortifolio():
         patience = config['patience']
         patience = int(patience)
 
-        # learning_rate = self.learning_rate
-        # l2_regularization = self.l2_regularization
-        # epochs_size = self.epochs_size
-        # patience = self.patience
         torch_r_val = torch_r_val[1:]
         
         opt = torch.optim.Adam(portifolio.parameters(), betas=(adam_betha1, adam_betha2) , lr=learning_rate, weight_decay=l2_regularization)
@@ -480,7 +487,7 @@ class ParametricPortifolio():
             if patience_counter == patience:
                 break
             
-            # If the difference between validation loss and training loss is greater than 50% break
+            # If the difference between validation loss and training loss is greater than 80% break
             relative_diff_loss =  (loss_values[-1] - loss_values_val[-1])/loss_values_val[-1]
             if i%50==0:
                 LOGGER.debug(f"Relative difference of validation and training loss: {relative_diff_loss}")
@@ -550,6 +557,7 @@ class ParametricPortifolio():
 
         LOGGER.info("Evaluating theta on test set.")
         #### TESTING CHARACTERISTICS
+        self.training = False
         firm_characteristics_test, r_test, time_test, number_of_stocks = self.create_characteristics(test_me, test_mom, test_btm, test_return)
 
         #### CREATE BENCHMARK FOR TESTING
@@ -564,10 +572,11 @@ class ParametricPortifolio():
         w_test_nn_constrained = torch.Tensor(constrain_weights(w_test_nn.detach().numpy().T).T)
         w_test_nn_constrained_transaction = w_test_nn_constrained*torch.Tensor(self.test_market_cost[:-1].to_numpy())
         
+        # import pdb; pdb.set_trace()
         self.weights_computed['nn_optimized'].append(w_test_nn.detach().numpy().T)
         self.weights_computed['nn_optimized_constrained'].append(w_test_nn_constrained.detach().numpy().T)
 
-        import pdb; pdb.set_trace()
+        
         self.test_r_nn = torch.mean(torch.sum((w_test_nn*torch_r_test), dim=1)).detach().numpy()
         self.test_r_nn_std = torch.std(torch.sum((w_test_nn*torch_r_test), dim=1)).detach().numpy()
         self.test_r_nn_constrained = torch.mean(torch.sum((w_test_nn_constrained*torch_r_test), dim=1)).detach().numpy()
@@ -575,10 +584,10 @@ class ParametricPortifolio():
         self.test_r_nn_constrained_transaction = torch.mean(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
         self.test_r_nn_constrained_transaction_std = torch.std(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
 
-        leverage_mask = w_test_nn<0
-        leverage = (w_test_nn*leverage_mask).sum(axis=1)
-        min_values, min_idxs = w_test_nn.min(axis=1)
-        max_values, max_idxs = w_test_nn.max(axis=1)
+        # leverage_mask = w_test_nn<0
+        # leverage = (w_test_nn*leverage_mask).sum(axis=1)
+        # min_values, min_idxs = w_test_nn.min(axis=1)
+        # max_values, max_idxs = w_test_nn.max(axis=1)
 
         # Get weight from t and return from t+1
         benchmark_r_test_series=pd.Series(np.sum(w_benchmark_test[:,:-1]*r_test[:,1:], axis=0)).describe()
@@ -595,8 +604,10 @@ class ParametricPortifolio():
         self.weights_computed['optimized'].append(w_test)
         
         w_test_constrained = constrain_weights(w_test.copy())
+        # import pdb; pdb.set_trace()
         self.weights_computed['optimized_constrained'].append(w_test_constrained)
 
+        # import pdb; pdb.set_trace()
         # Get weight from t and return from t+1
         r_test_series = pd.Series(np.sum(w_test[:,:-1]*r_test[:,1:], axis=0)).describe()
         r_test_constrained_series = pd.Series(np.sum(w_test_constrained[:,:-1]*r_test[:,1:], axis=0)).describe()
@@ -696,7 +707,9 @@ class ParametricPortifolio():
             self.test_market_cost = self.market_cost.loc[test]
 
             #### TRAINING CHARACTERISTICS
+            self.training = True
             firm_characteristics, r, time, number_of_stocks = self.create_characteristics(train_me, train_mom, train_btm, train_return)
+            self.training = False
             firm_characteristics_val, r_val, time_val, number_of_stocks = self.create_characteristics(val_me, val_mom, val_btm, val_return)
 
             ### Creating weights to a benchmark portifolio using uniform weighted returns
@@ -865,8 +878,8 @@ class ParametricPortifolio():
             x = range(len(mean_r))
             plt.plot(x, mean_r, label=f'Optimized return, Run:{run+1}', c=colors[run])
             plt.plot(x, [benchmark_mean_return_runs[run]]*len(mean_r), label=f'Benchmark return, Run:{run+1}', c=colors[run], linestyle='dashed')
-            plt.plot(x, mean_constrained_r_runs[run], label=f'Optimized return with weight constrain, Run:{run+1}', c=colors[run], linestyle='dotted')
-            plt.plot(x, mean_constrained_transaction_r_runs[run], label=f'Optimized return with weight constrain and transaction costs, Run:{run+1}', c=colors[run], linestyle='dashdot')
+            plt.plot(x, mean_constrained_r_runs[run], label=f'Optimized return with weight constraints, Run:{run+1}', c=colors[run], linestyle='dotted')
+            plt.plot(x, mean_constrained_transaction_r_runs[run], label=f'Optimized return with weight constraints and transaction costs, Run:{run+1}', c=colors[run], linestyle='dashdot')
         plt.xlabel('Iteration step')
         plt.ylabel('Mean return')
         plt.legend()
@@ -916,8 +929,8 @@ class ParametricPortifolio():
         plt.title("Mean return on test set with standard deviation.")
         plt.ylabel('Mean return')
         plt.bar(br1, test_r_mean, label='Optimized test return', yerr=test_r_mean_std, color='blue', width = 0.09)
-        plt.bar(br2, test_r_constrained_mean, label='Optimized test return with weight constrain', yerr=test_r_constrained_mean_std, color='green', width = 0.09)
-        plt.bar(br3, test_r_constrained_transaction_mean, label='Optimized test return with weight constrain and transaction costs.', yerr=test_r_constrained_transaction_mean_std, color='black', width = 0.09)
+        plt.bar(br2, test_r_constrained_mean, label='Optimized test return with weight constraints', yerr=test_r_constrained_mean_std, color='green', width = 0.09)
+        plt.bar(br3, test_r_constrained_transaction_mean, label='Optimized test return with weight constraints and transaction costs.', yerr=test_r_constrained_transaction_mean_std, color='black', width = 0.09)
         plt.bar(br4, benchmark_test_r_mean, label='Benchmark test return', yerr=benchmark_test_r_mean_std, color='red', width = 0.09)
         plt.xticks([])
         plt.grid()
@@ -930,12 +943,12 @@ class ParametricPortifolio():
         plt.title("Mean return on test set")
         plt.ylabel('Mean return')
         plt.bar(br1, test_r_mean, label='Optimized test return',color='blue', width = 0.09, alpha=0.5)
-        plt.bar(br2, test_r_constrained_mean, label='Optimized test return with weight constrain', color='green', width = 0.09, alpha=0.5)
-        plt.bar(br3, test_r_constrained_transaction_mean, label='Optimized test return with weight constrain and transaction costs.', color='black', width = 0.09, alpha=0.5)
+        plt.bar(br2, test_r_constrained_mean, label='Optimized test return with weight constraints', color='green', width = 0.09, alpha=0.5)
+        plt.bar(br3, test_r_constrained_transaction_mean, label='Optimized test return with weight constraints and transaction costs.', color='black', width = 0.09, alpha=0.5)
         plt.bar(br4, benchmark_test_r_mean, label='Benchmark test return', color='red', width = 0.09, alpha=0.5)
         plt.bar(br5, test_r_nn, label='Optimized test return using NN', color='brown', width = 0.09, alpha=0.5)
-        plt.bar(br6, test_r_nn_constrained, label='Optimized test return using NN with weight constrain', color='coral', width = 0.09, alpha=0.5)
-        plt.bar(br7, test_r_nn_constrained_transaction, label='Optimized test return using NN with weight constrain and transaction costs.', color='violet', width = 0.09, alpha=0.5)
+        plt.bar(br6, test_r_nn_constrained, label='Optimized test return using NN with weight constraints', color='coral', width = 0.09, alpha=0.5)
+        plt.bar(br7, test_r_nn_constrained_transaction, label='Optimized test return using NN with weight constraints and transaction costs.', color='violet', width = 0.09, alpha=0.5)
 
         plt.text(-0.04, test_r_mean*1.01, f'Return :{test_r_mean:.3f}%')
         plt.text(width-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%')
@@ -945,7 +958,7 @@ class ParametricPortifolio():
         plt.text(5*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%')
         plt.text(6*width-0.04 , test_r_nn_constrained_transaction*1.01, f'Return :{test_r_nn_constrained_transaction:.3f}%')
         plt.xticks([])
-        plt.legend(loc="lower right")
+        plt.legend(loc="center left")
         plt.savefig(f'./{experiment_label}_mean_return_test_set.jpg')
 
 
