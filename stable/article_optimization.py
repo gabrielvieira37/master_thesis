@@ -342,7 +342,6 @@ class ParametricPortifolio():
             mean_r_val.append(np.mean(np.sum(w_iter_val[:,:-1]*r_val[:,1:], axis=0)))   
             mean_r.append(np.mean(np.sum(w_iter[:,:-1]*r[:,1:], axis=0)))
             mean_constrained_r.append(np.mean(np.sum(w_iter_constrained[:,:-1]*r[:,1:] , axis=0 )))
-            # import pdb; pdb.set_trace()
             mean_constrained_transaction_r.append(np.mean(np.sum(w_iter_constrained[:,:-1]*r[:,1:]*self.train_market_cost[:-1].T, axis=0)) )
 
         sol = minimize(objective, theta0, callback=callback_steps, method='BFGS')
@@ -407,7 +406,6 @@ class ParametricPortifolio():
         )
 
         LOGGER.info("Finished NN hyperparameter optimization.")
-        # import pdb; pdb.set_trace()
         best_config =  analysis.get_best_config(metric='mean_loss', mode='min')
         LOGGER.info(f"Best NN config: {best_config}")
         return best_config
@@ -503,7 +501,6 @@ class ParametricPortifolio():
             #     logic_loss = strict_decreasing(comparison_loss)
             #     logic_loss_val = strict_increasing(comparison_loss_val)
 
-            #     # import pdb; pdb.set_trace()
             #     if logic_loss==True and logic_loss_val==True:
             #         break
         
@@ -572,7 +569,6 @@ class ParametricPortifolio():
         w_test_nn_constrained = torch.Tensor(constrain_weights(w_test_nn.detach().numpy().T).T)
         w_test_nn_constrained_transaction = w_test_nn_constrained*torch.Tensor(self.test_market_cost[:-1].to_numpy())
         
-        # import pdb; pdb.set_trace()
         self.weights_computed['nn_optimized'].append(w_test_nn.detach().numpy().T)
         self.weights_computed['nn_optimized_constrained'].append(w_test_nn_constrained.detach().numpy().T)
 
@@ -604,10 +600,8 @@ class ParametricPortifolio():
         self.weights_computed['optimized'].append(w_test)
         
         w_test_constrained = constrain_weights(w_test.copy())
-        # import pdb; pdb.set_trace()
         self.weights_computed['optimized_constrained'].append(w_test_constrained)
 
-        # import pdb; pdb.set_trace()
         # Get weight from t and return from t+1
         r_test_series = pd.Series(np.sum(w_test[:,:-1]*r_test[:,1:], axis=0)).describe()
         r_test_constrained_series = pd.Series(np.sum(w_test_constrained[:,:-1]*r_test[:,1:], axis=0)).describe()
@@ -839,8 +833,6 @@ class ParametricPortifolio():
 
         sharp_ratio_nn = self.sharp_ratio_nn
         sharp_ratio_constrained_nn = self.sharp_ratio_constrained_nn
-        
-        # import pdb; pdb.set_trace()
 
         LOGGER.info("Plotting final results.")
         # Only allows 10 runs, to allow more increase color names.
@@ -994,6 +986,30 @@ class ParametricPortifolio():
         plt.legend(loc="lower right")
         plt.savefig(f'./{experiment_label}_mean_sharp_ratios.jpg')
 
+        ##### LEVERAGE PLOTS #####
+        weight_types = ['optimized', 'nn_optimized']
+        stocks_names = np.array(self.stocks_names)
+        for weight_type in weight_types:
+            time_range = self.weights_computed[weight_type][0].shape[1]
+            w = self.weights_computed[weight_type][0]
+            plt.figure(figsize=(12,9))
+            plt.title(f"Total Leverage percentage for each test time step using {weight_type.replace('_', ' ')} weights")
+            plt.ylabel("Percentage")
+            plt.xlabel("Test time step")
+            plt.bar(range(time_range) ,abs(w*(w<0)).sum(axis=0)*100)
+            plt.savefig(f'./{experiment_label}_leverage_{weight_type}.jpg')
+
+            
+            min_leverage_values = abs((w*(w<0)).min(axis=0))*100
+            plt.figure(figsize=(12,9))
+            plt.title(f"Highest leverage percentage for each test time step using {weight_type.replace('_', ' ')} weights")
+            plt.ylabel("Percentage")
+            plt.xlabel("Test time step")
+            plt.bar(range(time_range) , min_leverage_values)
+            for i in range(time_range):
+                plt.text(i-0.4, min_leverage_values[i]*1.01, stocks_names[i], fontsize=8)
+            plt.savefig(f'./{experiment_label}_highest_leverage_{weight_type}.jpg')
+
         LOGGER.info("Saved plots in folder.")
 
     def _start(self):
@@ -1011,7 +1027,6 @@ class ParametricPortifolio():
 
         experiment_label = "OO_experiment_holdout_best_loss_patience"
         self.plot_final_results(experiment_label)
-        # import pdb; pdb.set_trace()
         LOGGER.info("Done")
 
 def main():

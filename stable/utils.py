@@ -208,8 +208,8 @@ def compute_transaction_costs(data_path):
 class ParametricPortifolioNN(nn.Module):
     def __init__(self, benchmark, return_, risk_constant, number_of_stocks):
         super(ParametricPortifolioNN, self).__init__()
-        # self.first_layer = nn.Linear(3,1)
-        # self.second_layer = nn.Linear(1,3)
+        # self.first_layer = nn.Linear(3,3)
+        # self.second_layer = nn.Linear(3,3)
         self.weights = nn.Linear(3,1, bias=False)
         self.relu = nn.ReLU()
         self.benchmark = benchmark
