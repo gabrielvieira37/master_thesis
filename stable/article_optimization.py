@@ -107,6 +107,14 @@ class ParametricPortifolio():
 
         self.weights_computed = {'optimized':[], 'optimized_constrained':[], 'nn_optimized':[], 'nn_optimized_constrained':[]}
 
+        self.results_comparison = {}
+        comparison_fields = ["cdi", "ibov"]
+        calculated_fields = ["nn", "nn_constraint", "opt", "opt_constraint"]
+
+        for comp_field in comparison_fields:
+            for cal_field in calculated_fields:
+                self.results_comparison[f"{cal_field}_{comp_field}_comparison"] = {}
+
     # TO-DO: Change it to load any number of characteristics
     def load_data(self):
         """
@@ -146,6 +154,8 @@ class ParametricPortifolio():
         self.monthly_return.fillna(method='ffill', inplace=True)
 
         self.market_cost = compute_transaction_costs(self.data_path)
+        self.cdi_return = pd.read_csv(os.path.join(self.data_path, "cdi_return.csv"))
+        self.ibov_return = pd.read_csv(os.path.join(self.data_path, "ibov_return.csv"))
 
         LOGGER.info("Loaded data successfully")
     
@@ -566,17 +576,20 @@ class ParametricPortifolio():
 
         ### Calculate NN test return
         w_test_nn = optimized_nn.weights(torch_characteristics_test[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark_test[:-1]
+        # w_test_nn = (w_test_nn.T/w_test_nn.sum(axis=1)).T
+
         w_test_nn_constrained = torch.Tensor(constrain_weights(w_test_nn.detach().numpy().T).T)
         w_test_nn_constrained_transaction = w_test_nn_constrained*torch.Tensor(self.test_market_cost[:-1].to_numpy())
         
         self.weights_computed['nn_optimized'].append(w_test_nn.detach().numpy().T)
         self.weights_computed['nn_optimized_constrained'].append(w_test_nn_constrained.detach().numpy().T)
 
-        
-        self.test_r_nn = torch.mean(torch.sum((w_test_nn*torch_r_test), dim=1)).detach().numpy()
-        self.test_r_nn_std = torch.std(torch.sum((w_test_nn*torch_r_test), dim=1)).detach().numpy()
-        self.test_r_nn_constrained = torch.mean(torch.sum((w_test_nn_constrained*torch_r_test), dim=1)).detach().numpy()
-        self.test_r_nn_constrained_std = torch.std(torch.sum((w_test_nn_constrained*torch_r_test), dim=1)).detach().numpy()
+        test_r_nn_sequence = torch.sum((w_test_nn*torch_r_test), dim=1)
+        self.test_r_nn = torch.mean(test_r_nn_sequence).detach().numpy()
+        self.test_r_nn_std = torch.std(test_r_nn_sequence).detach().numpy()
+        test_r_nn_constrained_sequence = torch.sum((w_test_nn_constrained*torch_r_test), dim=1)
+        self.test_r_nn_constrained = torch.mean(test_r_nn_constrained_sequence).detach().numpy()
+        self.test_r_nn_constrained_std = torch.std(test_r_nn_constrained_sequence).detach().numpy()
         self.test_r_nn_constrained_transaction = torch.mean(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
         self.test_r_nn_constrained_transaction_std = torch.std(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
 
@@ -597,14 +610,19 @@ class ParametricPortifolio():
             firms_coeff = sol_theta.dot(firm_df.T)
             w_test[i] = w_benchmark_test[i] + (1/number_of_stocks)*firms_coeff
         
+        # w_test = w_test/w_test.sum(axis=0)
+        
         self.weights_computed['optimized'].append(w_test)
         
         w_test_constrained = constrain_weights(w_test.copy())
         self.weights_computed['optimized_constrained'].append(w_test_constrained)
 
         # Get weight from t and return from t+1
-        r_test_series = pd.Series(np.sum(w_test[:,:-1]*r_test[:,1:], axis=0)).describe()
-        r_test_constrained_series = pd.Series(np.sum(w_test_constrained[:,:-1]*r_test[:,1:], axis=0)).describe()
+        r_test_sequence = pd.Series(np.sum(w_test[:,:-1]*r_test[:,1:], axis=0))
+        r_test_series = r_test_sequence.describe()
+
+        r_test_constrained_sequence = pd.Series(np.sum(w_test_constrained[:,:-1]*r_test[:,1:], axis=0))
+        r_test_constrained_series = r_test_constrained_sequence.describe()
         test_r_constrained_transaction_series = pd.Series(np.sum(w_test_constrained[:,:-1]*r_test[:,1:]*self.test_market_cost[:-1].T, axis=0)).describe()
 
         test_r = r_test_series['mean']
@@ -616,7 +634,23 @@ class ParametricPortifolio():
         test_r_constrained_transaction = test_r_constrained_transaction_series['mean']
         test_r_constrained_transaction_std = test_r_constrained_transaction_series['std']
 
+        test_cdi_return = self.cdi_return[-(time_test-1):].reset_index()['Taxa SELIC']
+        self.test_cdi_return = test_cdi_return
+        test_ibov_return = self.ibov_return[-(time_test-1):].reset_index()['Var%']
+        self.test_ibov_return = test_ibov_return
 
+        self.results_comparison["nn_cdi_comparison"] = test_r_nn_sequence.detach().numpy() - test_cdi_return
+        self.results_comparison["nn_constraint_cdi_comparison"] = test_r_nn_constrained_sequence.detach().numpy() - test_cdi_return
+        self.results_comparison["nn_ibov_comparison"] = test_r_nn_sequence.detach().numpy() - test_ibov_return
+        self.results_comparison["nn_constraint_ibov_comparison"] = test_r_nn_constrained_sequence.detach().numpy() - test_ibov_return
+
+        self.results_comparison["opt_cdi_comparison"] = r_test_sequence - test_cdi_return
+        self.results_comparison["opt_constraint_cdi_comparison"] = r_test_constrained_sequence - test_cdi_return
+        self.results_comparison["opt_ibov_comparison"] = r_test_sequence - test_ibov_return
+        self.results_comparison["opt_constraint_ibov_comparison"] = r_test_constrained_sequence - test_ibov_return
+
+        # import pdb; pdb.set_trace()
+        
         # Saving return variables into properties
         self.benchmark_test_r = benchmark_test_r
         self.benchmark_test_r_std  = benchmark_test_r_std
@@ -862,7 +896,8 @@ class ParametricPortifolio():
         plt.legend()
         plt.grid()
         plt.savefig(f'./{experiment_label}_objective_return_over_steps.jpg')
-        # plt.show()
+        
+        plt.close()
 
         plt.figure(figsize=(12,9))
         plt.title("Mean return using weight for each optimization step")
@@ -877,7 +912,8 @@ class ParametricPortifolio():
         plt.legend()
         plt.grid()
         plt.savefig(f'./{experiment_label}_mean_return_over_steps.jpg')
-        # plt.show()
+        
+        plt.close()
         
 
         plt.figure(figsize=(12,9))
@@ -892,6 +928,7 @@ class ParametricPortifolio():
         plt.grid()
         plt.savefig(f'./{experiment_label}_mean_return_over_epochs.jpg')
 
+        plt.close()
 
         plt.figure(figsize=(12,9))
         plt.title("Loss for each epoch")
@@ -906,7 +943,7 @@ class ParametricPortifolio():
         plt.savefig(f'./{experiment_label}_loss_over_epochs.jpg')
 
         ################################################
-
+        plt.close()
         ### TEST PLOTS ###
         
         width = 0.1
@@ -917,6 +954,8 @@ class ParametricPortifolio():
         br5 = [x + width for x in br4]
         br6 = [x + width for x in br5]
         br7 = [x + width for x in br6]
+        br8 = [x + width for x in br7]
+        br9 = [x + width for x in br8]
         plt.figure(figsize=(12,9))
         plt.title("Mean return on test set with standard deviation.")
         plt.ylabel('Mean return')
@@ -928,8 +967,8 @@ class ParametricPortifolio():
         plt.grid()
         plt.legend()
         plt.savefig(f'./{experiment_label}_mean_return_test_set_with_std.jpg')
-        # plt.show()
-
+        
+        plt.close()
 
         plt.figure(figsize=(12,9))
         plt.title("Mean return on test set")
@@ -941,6 +980,8 @@ class ParametricPortifolio():
         plt.bar(br5, test_r_nn, label='Optimized test return using NN', color='brown', width = 0.09, alpha=0.5)
         plt.bar(br6, test_r_nn_constrained, label='Optimized test return using NN with weight constraints', color='coral', width = 0.09, alpha=0.5)
         plt.bar(br7, test_r_nn_constrained_transaction, label='Optimized test return using NN with weight constraints and transaction costs.', color='violet', width = 0.09, alpha=0.5)
+        plt.bar(br8, self.test_cdi_return.mean(), label='CDI/Selic mean return', color='cyan', width = 0.09, alpha=0.5)
+        plt.bar(br9, self.test_ibov_return.mean(), label='IBOV mean return', color='lime', width = 0.09, alpha=0.5)
 
         plt.text(-0.04, test_r_mean*1.01, f'Return :{test_r_mean:.3f}%')
         plt.text(width-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%')
@@ -949,6 +990,8 @@ class ParametricPortifolio():
         plt.text(4*width-0.04 , test_r_nn*1.01, f'Return :{test_r_nn:.3f}%')
         plt.text(5*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%')
         plt.text(6*width-0.04 , test_r_nn_constrained_transaction*1.01, f'Return :{test_r_nn_constrained_transaction:.3f}%')
+        plt.text(7*width-0.04 , self.test_cdi_return.mean()*1.01, f'Return :{self.test_cdi_return.mean():.3f}%')
+        plt.text(8*width-0.04 , self.test_ibov_return.mean()*1.01, f'Return :{self.test_ibov_return.mean():.3f}%')
         plt.xticks([])
         plt.legend(loc="center left")
         plt.savefig(f'./{experiment_label}_mean_return_test_set.jpg')
@@ -966,7 +1009,7 @@ class ParametricPortifolio():
                     plt.xlabel("Stocks")
                     plt.colorbar().set_label("Weights")
                     plt.savefig(f'./{experiment_label}_stock_{weight_type}_weights_run_{index+1}.jpg')
-        
+        plt.close()
 
         plt.figure(figsize=(12,9))
         sharp_ratio = np.mean(sharp_ratio)
@@ -985,6 +1028,8 @@ class ParametricPortifolio():
         plt.text(3-0.3, sharp_ratio_constrained_nn*1.01, f'Sharp Ratio: {sharp_ratio_constrained_nn:.3f}')
         plt.legend(loc="lower right")
         plt.savefig(f'./{experiment_label}_mean_sharp_ratios.jpg')
+
+        plt.close()
 
         ##### LEVERAGE PLOTS #####
         weight_types = ['optimized', 'nn_optimized']
@@ -1009,6 +1054,24 @@ class ParametricPortifolio():
             for i in range(time_range):
                 plt.text(i-0.4, min_leverage_values[i]*1.01, stocks_names[i], fontsize=8)
             plt.savefig(f'./{experiment_label}_highest_leverage_{weight_type}.jpg')
+        plt.close()
+        
+
+        #### COMPARISON WITH IBOV AND SELIC/CDI ######
+        comparison_fields = ["cdi", "ibov"]
+        calculated_fields = ["nn", "nn_constraint", "opt", "opt_constraint"]
+
+        for comp_field in comparison_fields:
+            for cal_field in calculated_fields:
+                plt.figure(figsize=(12,9))
+                plt.title(f"Comparisson between {cal_field} and {comp_field} results.")
+                y = self.results_comparison[f"{cal_field}_{comp_field}_comparison"]
+                x = range(len(y))
+                plt.ylabel("Difference between return")
+                plt.xlabel("Month on test set")
+                plt.bar(x, y)
+                plt.grid()
+                plt.savefig(f'./{experiment_label}_comparison_{cal_field}_{comp_field}.jpg')
 
         LOGGER.info("Saved plots in folder.")
 
@@ -1025,7 +1088,7 @@ class ParametricPortifolio():
         
         self.create_experiment(indexes_list)
 
-        experiment_label = "OO_experiment_holdout_best_loss_patience"
+        experiment_label = "testing_comparison"
         self.plot_final_results(experiment_label)
         LOGGER.info("Done")
 
