@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from tqdm.notebook import tqdm
 from collections import defaultdict
 from scipy.optimize import minimize
+import datetime
+from dateutil.relativedelta import relativedelta
 import time as tm
 import os
 import logging
@@ -32,7 +34,8 @@ format_string = '%(asctime)s [%(process)d.%(thread)d] %(levelname)-3s %(name)-3s
 formatter = logging.Formatter(format_string)
 handler.setFormatter(formatter)
 LOGGER.addHandler(handler)
-
+logging.getLogger("ray.tune").setLevel(logging.ERROR)
+logging.getLogger("ray.tune.suggest.bayesopt").setLevel(logging.ERROR)
 
 class ParametricPortifolio():
     """
@@ -63,6 +66,11 @@ class ParametricPortifolio():
         self.training = True
         self.mean_mean = {}
         self.mean_std = {}
+
+        # 01/01/1995
+        base = datetime.datetime.fromtimestamp(788925600)
+        # 203 months
+        self.timestamp = pd.date_range(base, base + relativedelta(months=+203), freq='MS').strftime("%Y-%b").tolist()
 
         # Train values
         self.mean_obj_r_runs = []
@@ -222,7 +230,7 @@ class ParametricPortifolio():
     def normalize_characteristics(self, firm_characteristics, characteristics_names):
         """
         Normalize firm characteristics by subtracting it by the mean of all stocks at each time,
-        and dividing it by the sum of all stocks at each time. Bringing it to values between 0 and 1.
+        and dividing it by the std of all stocks at each time. Making it have unit variance.
 
         Parameters
         ----------
@@ -239,27 +247,24 @@ class ParametricPortifolio():
         """
 
 
-        epsilon = 1e-20
-        # Feature scaling to [-1, 1]
-        # firm_characteristics = (-1) + (((firm_characteristics-firm_characteristics.min()) * 2 ) /(firm_characteristics.max()-firm_characteristics.min()+epsilon))
-        
-
-        # Normalization using mean and sum of each feature to make its sum going to zero each time step.
+        # Normalization using mean and std of each feature to make its sum going to zero each time step.
         # Normalize within cross-section
         LOGGER.info(f"IsTraining: {self.training}")
         for name in characteristics_names:
             #Normalize firm characteristics for all stocks
-            if self.training == True:
-                mean_mean = firm_characteristics.T.loc[(slice(None), name), :].mean().mean()
-                mean_std = firm_characteristics.T.loc[(slice(None), name), :].std().mean()
-                self.mean_mean[name] = mean_mean
-                self.mean_std[name] = mean_std
+            # if self.training == True:
+            mean_mean = firm_characteristics.T.loc[(slice(None), name), :].mean()
+            mean_std = firm_characteristics.T.loc[(slice(None), name), :].std()
+            #     self.mean_mean[name] = mean_mean
+            #     self.mean_std[name] = mean_std
 
-            mean_mean = self.mean_mean[name]
-            mean_std = self.mean_std[name]
+            # mean_mean = self.mean_mean[name]
+            # mean_std = self.mean_std[name]
 
             firm_characteristics.T.loc[(slice(None), name), :] -= mean_mean
             firm_characteristics.T.loc[(slice(None), name), :] /= mean_std
+        
+        # import pdb; pdb.set_trace()
         LOGGER.info("Normalized firm characteristics")
         return firm_characteristics
     
@@ -286,14 +291,30 @@ class ParametricPortifolio():
             Benchmark weights, used to create optimized weights.
         transaction_cost: float
             Define transaction cost.
+        firm_characteristics_val: pandas.DataFrame
+
+        r_val: numpy.array
+
+        time_val: int
+
+        w_benchmark_val: numpy.array
+
         Returns
         -------
-        sol: scipy.optimize.OptimizeResult
+        self.sol: scipy.optimize.OptimizeResult
             Solution object used to retrieve theta optimized and optimization information.
-        mean_obj_r: [float, ]
+        self.mean_obj_r: [float, ]
             List of objective values through each optimization step.
-        mean_r: [float, ]
+        self.mean_r: [float, ]
             List of return using optimized weights through each optimization step.
+        self.mean_obj_r_val: [float, ]
+            List of objective validation values through each optimization step.
+        self.mean_r_val: [float, ]
+            List of validation return using optimized weights through each optimization step.
+        self.mean_constrained_r: [float, ]
+            List of return constrained using weights with 30% of leverage.
+        self.mean_constrained_transaction_r: [float, ]
+            List of return constrained adding transaction costs.
         """
         LOGGER.info("Started optimization step.")
 
@@ -365,7 +386,35 @@ class ParametricPortifolio():
         LOGGER.info("Finished optimization step.")
 
     def nn_hyperparameter_optimizer(self, config):
-        """Optimize hyperparameters using baysean optimization"""
+        """
+        Optimize hyperparameters using baysean optimization
+
+        Parameters
+        ----------
+        self.nn_optimizer: function
+            Function to perform portifolio optimization using neural networks.
+        self.torch_characteristics: torch.Tensor
+
+        self.torch_r: torch.Tensor
+
+        self.torch_benchmark: torch.Tensor
+
+        self.number_of_stocks: Int
+
+        self.torch_characteristics_val: torch.Tensor
+
+        self.torch_r_val: torch.Tensor
+
+        self.torch_benchmark_val: torch.Tensor
+            
+        config: Dict
+            Dictionary containing all hyperparameters to be used.
+        
+        Return
+        ------
+            Does not return anything but report to hyperparameter 
+            optimization the result using current hyperparameter configuration.
+        """
 
         
         torch_characteristics=self.torch_characteristics
@@ -393,7 +442,21 @@ class ParametricPortifolio():
         )
 
     def get_best_hyperparameter_config(self):
-        """Get best hyperparamter config using hyperparamter optimization"""
+        """
+        Get best hyperparameter config using hyperparamter optimization
+        
+        Parameters
+        ----------
+        self.nn_hyperparameter_optimizer: function
+            Function to map hyperparamter optimization with nn optimization 
+
+        Returns
+        -------
+        best_config: dict
+            Dictionary containing best hyperparameter config such as : 
+            learning_rate, l2_regularization, epochs_size, adam_betha1, adam_betha2 and patience.
+
+        """
 
         LOGGER.info("Started NN hyperparameter optimization.")
         
@@ -423,6 +486,27 @@ class ParametricPortifolio():
     def nn_optimizer(self, torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val, config):
         """
         Optimize and fing theta using a neural network. Theta is the weights of the optimized NN.
+
+        Parameters
+        ----------
+        torch_characteristics:
+        torch_r, torch_benchmark:
+        number_of_stocks:
+        torch_characteristics_val:
+        torch_r_val:
+        torch_benchmark_val:
+        config:
+        
+        Returns
+        -------
+        self.nn_loss:
+        self.nn_return:
+        self.nn_return_std:
+        self.nn_val_loss:
+        self.nn_val_return:
+        self.nn_val_return_std:
+        optimized_nn:
+
         """
         LOGGER.info("Start neural network optimization.")
         portifolio = ParametricPortifolioNN(torch_benchmark[:-1], torch_r[1:], self.risk_constant, number_of_stocks)
@@ -546,11 +630,11 @@ class ParametricPortifolio():
             Test set of the book to market ratio characteristic.
         test_return: pandas.DataFrame
             Test set of the returns.
-        stocks_names: [str, ]
-            List of stocks to be looked up.
+        optimized_nn: 
 
         Returns
         -------
+        ############### NEED TO ADD TONS OF INFO HERE ###############
 
         benchmark_test_r: float
             Benchmark return on test set.
@@ -639,18 +723,52 @@ class ParametricPortifolio():
         test_ibov_return = self.ibov_return[-(time_test-1):].reset_index()['Var%']
         self.test_ibov_return = test_ibov_return
 
-        self.results_comparison["nn_cdi_comparison"] = test_r_nn_sequence.detach().numpy() - test_cdi_return
-        self.results_comparison["nn_constraint_cdi_comparison"] = test_r_nn_constrained_sequence.detach().numpy() - test_cdi_return
-        self.results_comparison["nn_ibov_comparison"] = test_r_nn_sequence.detach().numpy() - test_ibov_return
-        self.results_comparison["nn_constraint_ibov_comparison"] = test_r_nn_constrained_sequence.detach().numpy() - test_ibov_return
+        self.results_comparison["nn_cdi_comparison"] = ((test_r_nn_sequence.detach().numpy() / test_cdi_return)-1)
+        self.results_comparison["nn_constraint_cdi_comparison"] = ((test_r_nn_constrained_sequence.detach().numpy() / test_cdi_return)-1)*100
+        self.results_comparison["nn_ibov_comparison"] = ((test_r_nn_sequence.detach().numpy() / test_ibov_return)-1)*100
+        self.results_comparison["nn_constraint_ibov_comparison"] = ((test_r_nn_constrained_sequence.detach().numpy() - test_ibov_return)-1)*100
 
-        self.results_comparison["opt_cdi_comparison"] = r_test_sequence - test_cdi_return
-        self.results_comparison["opt_constraint_cdi_comparison"] = r_test_constrained_sequence - test_cdi_return
-        self.results_comparison["opt_ibov_comparison"] = r_test_sequence - test_ibov_return
-        self.results_comparison["opt_constraint_ibov_comparison"] = r_test_constrained_sequence - test_ibov_return
+        self.results_comparison["opt_cdi_comparison"] = ((r_test_sequence / test_cdi_return)-1)*100
+        self.results_comparison["opt_constraint_cdi_comparison"] = ((r_test_constrained_sequence / test_cdi_return)-1)*100
+        self.results_comparison["opt_ibov_comparison"] = ((r_test_sequence / test_ibov_return)-1)*100
+        self.results_comparison["opt_constraint_ibov_comparison"] = ((r_test_constrained_sequence / test_ibov_return)-1)*100
+
+
+        test_size = self.results_comparison["nn_cdi_comparison"].shape[0]
 
         # import pdb; pdb.set_trace()
-        
+
+        df = pd.DataFrame(test_r_nn_constrained_sequence.unsqueeze(0).detach().numpy(), columns=self.timestamp[-test_size:])
+        df = df.append(
+            pd.DataFrame(
+                self.results_comparison["nn_constraint_cdi_comparison"].to_numpy().reshape(1,40),columns =self.timestamp[-test_size:]),
+                ignore_index=True 
+                )
+        df = df.append(
+            pd.DataFrame(
+                self.results_comparison["nn_constraint_ibov_comparison"].to_numpy().reshape(1,40),columns =self.timestamp[-test_size:]),
+                ignore_index=True 
+                )
+        df['type'] = ["raw_nn_return", "raw_cdi_comparison", "raw_ibov_comparison"]
+        df.round(3).set_index('type').to_csv('nn_cdi_ibov_comparison.csv')
+
+
+        df = pd.DataFrame(r_test_constrained_sequence.to_numpy().reshape(1,40), columns=self.timestamp[-test_size:])
+        df = df.append(
+            pd.DataFrame(
+                self.results_comparison["opt_constraint_cdi_comparison"].to_numpy().reshape(1,40),columns =self.timestamp[-test_size:]),
+                ignore_index=True 
+                )
+        df = df.append(
+            pd.DataFrame(
+                self.results_comparison["opt_constraint_ibov_comparison"].to_numpy().reshape(1,40),columns =self.timestamp[-test_size:]),
+                ignore_index=True 
+                )
+        df['type'] = ["raw_opt_return", "raw_cdi_comparison", "raw_ibov_comparison"]
+        df.round(3).set_index('type').to_csv('opt_cdi_ibov_comparison.csv')
+
+        # import pdb; pdb.set_trace()
+    
         # Saving return variables into properties
         self.benchmark_test_r = benchmark_test_r
         self.benchmark_test_r_std  = benchmark_test_r_std
@@ -1031,7 +1149,7 @@ class ParametricPortifolio():
 
         plt.close()
 
-        ##### LEVERAGE PLOTS #####
+        ##### LEVERAGE PLOTS ##### -> only using first data to be fast
         weight_types = ['optimized', 'nn_optimized']
         stocks_names = np.array(self.stocks_names)
         for weight_type in weight_types:
@@ -1072,8 +1190,10 @@ class ParametricPortifolio():
                 plt.bar(x, y)
                 plt.grid()
                 plt.savefig(f'./{experiment_label}_comparison_{cal_field}_{comp_field}.jpg')
-
+        
         LOGGER.info("Saved plots in folder.")
+
+
 
     def _start(self):
         self.load_data()
