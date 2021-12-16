@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from ray import tune
 from ray.tune.suggest.bayesopt import BayesOptSearch
+from scipy.stats import kurtosis, skew
 
 torch.random.manual_seed(123)
 os.environ['RAY_DISABLE_IMPORT_WARNING'] = '1'
@@ -70,7 +71,8 @@ class ParametricPortifolio():
         # 01/01/1995
         base = datetime.datetime.fromtimestamp(788925600)
         # 203 months
-        self.timestamp = pd.date_range(base, base + relativedelta(months=+203), freq='MS').strftime("%Y-%b").tolist()
+        self.timestamp = pd.date_range(base, base + relativedelta(months=+202), freq='MS').strftime("%Y-%b").tolist()
+        # import pdb; pdb.set_trace();
 
         # Train values
         self.mean_obj_r_runs = []
@@ -154,12 +156,17 @@ class ParametricPortifolio():
         self.monthly_return = pd.read_csv(os.path.join(self.data_path, "monthly_return.csv"))
         self.lreturn.fillna(method='bfill', inplace=True)
         self.lreturn.fillna(method='ffill', inplace=True)
+        self.mcap = np.log(self.mcap)
+        self.mcap[self.mcap==-np.inf] = 0
         self.mcap.fillna(method='bfill', inplace=True)
         self.mcap.fillna(method='ffill', inplace=True)
+        self.book_to_mkt_ratio = np.log(1+self.book_to_mkt_ratio)
+        self.book_to_mkt_ratio[self.book_to_mkt_ratio==-np.inf] = 0
         self.book_to_mkt_ratio.fillna(method='bfill', inplace=True)
         self.book_to_mkt_ratio.fillna(method='ffill', inplace=True)
         self.monthly_return.fillna(method='bfill', inplace=True)
         self.monthly_return.fillna(method='ffill', inplace=True)
+        # import pdb; pdb.set_trace()
 
         self.market_cost = compute_transaction_costs(self.data_path)
         self.cdi_return = pd.read_csv(os.path.join(self.data_path, "cdi_return.csv"))
@@ -599,6 +606,7 @@ class ParametricPortifolio():
             #         break
         
         theta = portifolio.weights.state_dict()['weight'].detach().numpy()
+
         self.nn_loss = loss_values
         self.nn_return = return_values_mean
         self.nn_return_std = return_values_std
@@ -613,7 +621,7 @@ class ParametricPortifolio():
 
     # TO-DO: Change it to load any number of characteristics
     # BUY-HOLD STRATEGY
-    def evaluate_theta(self, sol_theta, test_me, test_mom, test_btm, test_return, optimized_nn):
+    def evaluate_theta(self, sol_theta, test_me, test_mom, test_btm, test_return, optimized_nn, test):
         """
         Evaluate theta optimized return on test sample.
 
@@ -635,6 +643,7 @@ class ParametricPortifolio():
         Returns
         -------
         ############### NEED TO ADD TONS OF INFO HERE ###############
+        
 
         benchmark_test_r: float
             Benchmark return on test set.
@@ -656,6 +665,7 @@ class ParametricPortifolio():
 
         ### Create NN Variables
         torch_characteristics_test, torch_r_test, torch_benchmark_test  = convert_to_nn_variables(firm_characteristics_test, r_test, w_benchmark_test)
+        old_torch_r_test = torch_r_test.clone()
         torch_r_test = torch_r_test[1:]
 
         ### Calculate NN test return
@@ -712,6 +722,11 @@ class ParametricPortifolio():
         test_r = r_test_series['mean']
         test_r_std = r_test_series['std']
 
+        self.create_comparison_excel(
+            optimized_nn, torch_characteristics_test, number_of_stocks,
+            torch_benchmark_test, old_torch_r_test, sol_theta, firm_characteristics_test, 
+            r_test, w_benchmark_test, 'test', test)
+
         test_r_constrained = r_test_constrained_series['mean']
         test_r_constrained_std = r_test_constrained_series['std']
 
@@ -723,51 +738,31 @@ class ParametricPortifolio():
         test_ibov_return = self.ibov_return[-(time_test-1):].reset_index()['Var%']
         self.test_ibov_return = test_ibov_return
 
-        self.results_comparison["nn_cdi_comparison"] = ((test_r_nn_sequence.detach().numpy() / test_cdi_return)-1)
-        self.results_comparison["nn_constraint_cdi_comparison"] = ((test_r_nn_constrained_sequence.detach().numpy() / test_cdi_return)-1)*100
-        self.results_comparison["nn_ibov_comparison"] = ((test_r_nn_sequence.detach().numpy() / test_ibov_return)-1)*100
-        self.results_comparison["nn_constraint_ibov_comparison"] = ((test_r_nn_constrained_sequence.detach().numpy() - test_ibov_return)-1)*100
+        import pdb; pdb.set_trace()
+        ## Statistics
 
-        self.results_comparison["opt_cdi_comparison"] = ((r_test_sequence / test_cdi_return)-1)*100
-        self.results_comparison["opt_constraint_cdi_comparison"] = ((r_test_constrained_sequence / test_cdi_return)-1)*100
-        self.results_comparison["opt_ibov_comparison"] = ((r_test_sequence / test_ibov_return)-1)*100
-        self.results_comparison["opt_constraint_ibov_comparison"] = ((r_test_constrained_sequence / test_ibov_return)-1)*100
-
-
-        test_size = self.results_comparison["nn_cdi_comparison"].shape[0]
-
-        # import pdb; pdb.set_trace()
-
-        df = pd.DataFrame(test_r_nn_constrained_sequence.unsqueeze(0).detach().numpy(), columns=self.timestamp[-test_size:])
-        df = df.append(
-            pd.DataFrame(
-                self.results_comparison["nn_constraint_cdi_comparison"].to_numpy().reshape(1,40),columns =self.timestamp[-test_size:]),
-                ignore_index=True 
-                )
-        df = df.append(
-            pd.DataFrame(
-                self.results_comparison["nn_constraint_ibov_comparison"].to_numpy().reshape(1,40),columns =self.timestamp[-test_size:]),
-                ignore_index=True 
-                )
-        df['type'] = ["raw_nn_return", "raw_cdi_comparison", "raw_ibov_comparison"]
-        df.round(3).set_index('type').to_csv('nn_cdi_ibov_comparison.csv')
+        ## NN 
+        ### Normal
+        test_r_nn_sequence = test_r_nn_sequence.detach().numpy()
+        nn_std = np.std(test_r_nn_sequence)
+        partial_nn_std = None
+        kurt_nn = kurtosis(test_r_nn_sequence)
+        skew_nn = skew(test_r_nn_sequence)
+        
+        w_test_nn
+        ### Constrained
+        test_r_nn_constrained_sequence
+        w_test_nn_constrained
 
 
-        df = pd.DataFrame(r_test_constrained_sequence.to_numpy().reshape(1,40), columns=self.timestamp[-test_size:])
-        df = df.append(
-            pd.DataFrame(
-                self.results_comparison["opt_constraint_cdi_comparison"].to_numpy().reshape(1,40),columns =self.timestamp[-test_size:]),
-                ignore_index=True 
-                )
-        df = df.append(
-            pd.DataFrame(
-                self.results_comparison["opt_constraint_ibov_comparison"].to_numpy().reshape(1,40),columns =self.timestamp[-test_size:]),
-                ignore_index=True 
-                )
-        df['type'] = ["raw_opt_return", "raw_cdi_comparison", "raw_ibov_comparison"]
-        df.round(3).set_index('type').to_csv('opt_cdi_ibov_comparison.csv')
 
-        # import pdb; pdb.set_trace()
+        ## OPT
+        ### Normal
+        r_test_sequence
+        w_test
+        ### Constrained
+        r_test_constrained_sequence
+        w_test_constrained
     
         # Saving return variables into properties
         self.benchmark_test_r = benchmark_test_r
@@ -785,6 +780,77 @@ class ParametricPortifolio():
         LOGGER.info("Evalueted theta on test set.")
 
     
+    def create_comparison_excel(
+        self, optimized_nn, torch_characteristics, number_of_stocks,
+        torch_benchmark, torch_r, sol_theta, firm_characteristics, 
+        r, w_benchmark, data_type, data_size):
+        """
+        Create comparison excel for CDI and IBOV benchmark
+        """
+        w_nn = optimized_nn.weights(torch_characteristics[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark[:-1]
+        w_nn_constrained = torch.Tensor(constrain_weights(w_nn.detach().numpy().T).T)
+        r_nn_constrained_sequence = torch.sum((w_nn_constrained*torch_r[1:]), dim=1)
+
+        # import pdb; pdb.set_trace()
+        w = np.empty(shape=(number_of_stocks, len(data_size)))
+        for i in range(number_of_stocks):
+            firm_df = firm_characteristics[i].copy()
+            firms_coeff = sol_theta.dot(firm_df.T)
+            w[i] = w_benchmark[i] + (1/number_of_stocks)*firms_coeff
+
+        w_constrained = constrain_weights(w.copy())
+        r_constrained_sequence = pd.Series(np.sum(w_constrained[:,:-1]*r[:,1:], axis=0))
+
+        data_dimension = len(data_size[1:])
+
+        cdi_return = self.cdi_return.loc[data_size[1:]].reset_index()['Taxa SELIC']
+        ibov_return = self.ibov_return.loc[data_size[1:]].reset_index()['Var%']
+        
+        self.results_comparison[f"{data_type}_nn_constraint_cdi_comparison"] = ((r_nn_constrained_sequence.detach().numpy() / cdi_return)-1)*100
+        self.results_comparison[f"{data_type}_nn_constraint_ibov_comparison"] = ((r_nn_constrained_sequence.detach().numpy() / ibov_return)-1)*100
+
+
+        self.results_comparison[f"{data_type}_opt_constraint_cdi_comparison"] = ((r_constrained_sequence / cdi_return)-1)*100
+        self.results_comparison[f"{data_type}_opt_constraint_ibov_comparison"] = ((r_constrained_sequence / ibov_return)-1)*100
+
+        lower_idx = data_size[1]
+        upper_idx = data_size[-1]+1
+        
+        # import pdb;pdb.set_trace()
+        df = pd.DataFrame(r_nn_constrained_sequence.unsqueeze(0).detach().numpy(), columns=self.timestamp[lower_idx:upper_idx] )
+        df = df.append(
+            pd.DataFrame(
+                self.results_comparison[f"{data_type}_nn_constraint_cdi_comparison"].to_numpy().reshape(1,data_dimension),
+                columns =self.timestamp[lower_idx:upper_idx]),
+                ignore_index=True 
+                )
+        df = df.append(
+            pd.DataFrame(
+                self.results_comparison[f"{data_type}_nn_constraint_ibov_comparison"].to_numpy().reshape(1,data_dimension),
+                columns =self.timestamp[lower_idx:upper_idx]),
+                ignore_index=True 
+                )
+        df['Return type'] = ["Neural Network return (%)", "NN return compared to CDI/Selic (%)", "NN return compared to IBOV(%)"]
+        df.round(3).set_index('Return type').to_csv(f'{data_type}_nn_cdi_ibov_comparison.csv')
+
+
+        df = pd.DataFrame(r_constrained_sequence.to_numpy().reshape(1,data_dimension), columns=self.timestamp[lower_idx:upper_idx])
+        df = df.append(
+            pd.DataFrame(
+                self.results_comparison[f"{data_type}_opt_constraint_cdi_comparison"].to_numpy().reshape(1,data_dimension),
+                columns=self.timestamp[lower_idx:upper_idx]),
+                ignore_index=True 
+                )
+        df = df.append(
+            pd.DataFrame(
+                self.results_comparison[f"{data_type}_opt_constraint_ibov_comparison"].to_numpy().reshape(1,data_dimension),
+                columns=self.timestamp[lower_idx:upper_idx]),
+                ignore_index=True 
+                )
+        df['Return type'] = ["Optimization return (%)", "Optimization return compared to CDI/Selic (%)", "Optimization return compared to IBOV(%)"]
+        df.round(3).set_index('Return type').to_csv(f'{data_type}_opt_cdi_ibov_comparison.csv')
+
+
     # TO-DO: Change it to use any number of characteristics
     def create_experiment(self, indexes_list):
         """
@@ -889,6 +955,7 @@ class ParametricPortifolio():
             optimized_nn = self.nn_optimizer(
                 torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val, best_config)
 
+
             # ### CREATING RETURNS TO COMPARE, OPTIMIZATION STEP
             benchmark_mean_return = np.mean(np.sum(w_benchmark[:,:-1]*r[:,1:], axis=0))
             
@@ -898,9 +965,29 @@ class ParametricPortifolio():
             sol_theta = self.sol.x
             # sol_theta = ''
 
+            btm = self.book_to_mkt_ratio
+            me = self.mcap
+            mom = self.lreturn
+            return_ = self.monthly_return
+
+            firm_characteristics_global, r_global, time_global, number_of_stocks = self.create_characteristics(
+            me, mom, btm, return_
+            )
+            w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
+            torch_characteristics_global, torch_r_global, torch_benchmark_global  = convert_to_nn_variables(
+                firm_characteristics_global, r_global, w_benchmark_global
+                )
+
+            ## HARDCODED
+            global_ = np.arange(203)
+            self.create_comparison_excel(
+            optimized_nn, torch_characteristics_global, number_of_stocks,
+            torch_benchmark_global, torch_r_global, sol_theta, firm_characteristics_global, 
+            r_global, w_benchmark_global, 'global', global_)
+
 
             ### Evaluate founded theta on test samples and find its mean return from optimized and benchmark.
-            self.evaluate_theta(sol_theta, test_me, test_mom, test_btm, test_return, optimized_nn)
+            self.evaluate_theta(sol_theta, test_me, test_mom, test_btm, test_return, optimized_nn, test)
             
             # Optimization step
             self.mean_obj_r_runs.append(self.mean_obj_r)
