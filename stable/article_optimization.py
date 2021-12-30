@@ -733,36 +733,58 @@ class ParametricPortifolio():
         test_r_constrained_transaction = test_r_constrained_transaction_series['mean']
         test_r_constrained_transaction_std = test_r_constrained_transaction_series['std']
 
-        test_cdi_return = self.cdi_return[-(time_test-1):].reset_index()['Taxa SELIC']
+        test_cdi_return = self.cdi_return[-(time_test):-1].reset_index()['Taxa SELIC']
         self.test_cdi_return = test_cdi_return
-        test_ibov_return = self.ibov_return[-(time_test-1):].reset_index()['Var%']
+        test_ibov_return = self.ibov_return[-(time_test):-1].reset_index()['Var%']
         self.test_ibov_return = test_ibov_return
 
-        import pdb; pdb.set_trace()
+        
         ## Statistics
 
         ## NN 
         ### Normal
         test_r_nn_sequence = test_r_nn_sequence.detach().numpy()
-        nn_std = np.std(test_r_nn_sequence)
-        partial_nn_std = None
-        kurt_nn = kurtosis(test_r_nn_sequence)
-        skew_nn = skew(test_r_nn_sequence)
-        
-        w_test_nn
-        ### Constrained
-        test_r_nn_constrained_sequence
-        w_test_nn_constrained
+        w_test_nn = w_test_nn.detach().numpy()
+        torch_r_test = torch_r_test.detach().numpy()
+        nn_stats_info = self.calculate_statistics(
+            w_test_nn, test_r_nn_sequence, 'nn', test_cdi_return, torch_r_test
+            )
 
+        ### Constrained
+        test_r_nn_constrained_sequence = test_r_nn_constrained_sequence.detach().numpy()
+        w_test_nn_constrained = w_test_nn_constrained.detach().numpy()
+        nn_constrained_stats_info = self.calculate_statistics(
+            w_test_nn_constrained, test_r_nn_constrained_sequence, 
+            'nn', test_cdi_return, torch_r_test
+            )
 
 
         ## OPT
         ### Normal
-        r_test_sequence
-        w_test
+        test_r_opt_sequence = r_test_sequence.to_numpy()
+        w_test_opt = w_test[:,:-1]
+        r_test_opt = r_test[:,1:]
+
+        opt_stats_info = self.calculate_statistics(
+            w_test_opt, test_r_opt_sequence, 'opt', test_cdi_return, r_test_opt
+            )
+
         ### Constrained
-        r_test_constrained_sequence
-        w_test_constrained
+
+        test_r_opt_sequence_constrained = r_test_constrained_sequence.to_numpy()
+        w_test_opt_constrained = w_test_constrained[:,:-1]
+        r_test_opt_constrained = r_test[:,1:]
+
+        opt_constrained_stats_info = self.calculate_statistics(
+            w_test_opt_constrained, test_r_opt_sequence_constrained, 
+            'opt', test_cdi_return, r_test_opt_constrained
+            )
+
+        import pdb; pdb.set_trace()
+
+
+        # r_test_constrained_sequence
+        # w_test_constrained = w_test_constrained[:,:-1]
     
         # Saving return variables into properties
         self.benchmark_test_r = benchmark_test_r
@@ -778,6 +800,117 @@ class ParametricPortifolio():
         self.test_r_constrained_transaction_std = test_r_constrained_transaction_std
 
         LOGGER.info("Evalueted theta on test set.")
+
+    def calculate_statistics(self, w_test, test_r_sequence, matrix_type, test_cdi_return, r_test):
+        """
+        Calculate all statistics for each model chosen
+
+        Parameters
+        ----------
+        w_test: numpy.Array
+            Weights from chosen model
+
+        test_r_sequence: numpy.Array
+            Return from chosen model
+
+        matrix_type: str
+            Set this as 'opt' if using 
+            optimizer matrix
+
+        test_cdi_return: numpy.Array 
+            Risk free return
+
+        r_test: numpy.Array
+            Raw return in specific format
+
+        Returns
+        -------
+        stats_info: dict
+            Dictionary containing multiple 
+            statistical information.
+
+        """
+
+        stats_info = {}
+        shape_time = 0
+        shape_stocks = 1
+
+
+        if matrix_type=='opt':
+            r_test = r_test.T
+            w_test = w_test.T
+        
+        test_std = np.std(test_r_sequence)
+        test_r_sequence_star = test_r_sequence - test_r_sequence.mean()
+        partial_std = test_r_sequence_star[test_r_sequence_star<0].std()
+        test_kurt = kurtosis(test_r_sequence, fisher=True)
+        test_skew = skew(test_r_sequence)
+        excess_return = np.mean(test_r_sequence-test_cdi_return)
+        
+
+        return_sequence = ((test_r_sequence/100)+1)
+        if (return_sequence<0).any():
+            positions = []
+            for idx, value in enumerate(return_sequence):
+                if value < 0:
+                    positions.append(idx)
+            start_idx = positions[-1]
+        else:
+            start_idx = -1
+        
+        cumulative_return = np.cumprod(return_sequence[start_idx+1:])[-1]*100
+        sharpe_ratio = excess_return/test_std
+        
+        mean_max = np.mean(np.max(w_test, axis=shape_stocks))
+        mean_min = np.mean(np.min(w_test, axis=shape_stocks))
+        mean_gross_leverage = np.mean(np.sum(np.abs(w_test), axis=shape_stocks))
+        proportion_leverage = np.mean(w_test<0)*100
+
+
+        return_test_hold = np.empty_like(w_test)
+
+        w_r_test = w_test*r_test
+
+        for idx_h_r in range(r_test.shape[shape_time]):
+            return_test_hold[idx_h_r] = ((w_r_test[idx_h_r]+100)/100) / ((test_r_sequence[idx_h_r]+100)/100)
+
+        w_test_hold = np.empty_like(w_test)
+
+        for idx_h_w in range(1, r_test.shape[shape_time]):
+            w_test_hold[idx_h_w] = return_test_hold[idx_h_w-1] * w_test[idx_h_w-1]
+
+        avg_turnover= np.abs(w_test-w_test_hold).mean(axis=1).mean()*100
+
+        total_diversification = []
+        
+        for idx_div in range(2, w_test.shape[shape_time]+1):
+            diversitfication = w_test[idx_div-1].dot(
+                w_r_test[:idx_div].std(axis=0)) / np.sqrt(
+                    w_test[idx_div-1].dot(
+                        np.cov(
+                            r_test[:idx_div].T)).dot(
+                                w_test[idx_div-1].T
+                                )
+                            )
+            total_diversification.append(diversitfication)
+        
+        average_diverstification = np.mean(total_diversification)
+
+        stats_info['test_std']  = np.round(test_std, 4)
+        stats_info['partial_std']  = np.round(partial_std, 4)
+        stats_info['test_kurt']  = np.round(test_kurt, 4)
+        stats_info['test_skew']  = np.round(test_skew, 4)
+        stats_info['average_diverstification']  = np.round(average_diverstification, 4)
+        stats_info['mean_max']  = np.round(mean_max, 4)
+        stats_info['mean_min']  = np.round(mean_min, 4)
+        stats_info['mean_gross_leverage']  = np.round(mean_gross_leverage, 4)
+        stats_info['proportion_leverage']  = np.round(proportion_leverage, 4)
+        stats_info['avg_turnover']  = np.round(avg_turnover, 4)
+        stats_info['excess_return']  = np.round(excess_return, 4)
+        stats_info['cumulative_return']  = np.round(cumulative_return, 4)
+        stats_info['sharpe_ratio']  = np.round(sharpe_ratio, 4)
+
+        return stats_info
 
     
     def create_comparison_excel(
