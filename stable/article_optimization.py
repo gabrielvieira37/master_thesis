@@ -750,6 +750,9 @@ class ParametricPortifolio():
             w_test_nn, test_r_nn_sequence, 'nn', test_cdi_return, torch_r_test
             )
 
+        nn_df = pd.DataFrame(list(nn_stats_info.values()), columns=['Neural_Network'])
+        nn_df['Statistic_Name'] = list(nn_stats_info.keys())
+
         ### Constrained
         test_r_nn_constrained_sequence = test_r_nn_constrained_sequence.detach().numpy()
         w_test_nn_constrained = w_test_nn_constrained.detach().numpy()
@@ -758,6 +761,10 @@ class ParametricPortifolio():
             'nn', test_cdi_return, torch_r_test
             )
 
+        nn_constrained_df = pd.DataFrame(
+            list(nn_constrained_stats_info.values()), 
+            columns=['Neural_Network_Constrained']
+            )
 
         ## OPT
         ### Normal
@@ -768,6 +775,8 @@ class ParametricPortifolio():
         opt_stats_info = self.calculate_statistics(
             w_test_opt, test_r_opt_sequence, 'opt', test_cdi_return, r_test_opt
             )
+        
+        opt_df = pd.DataFrame(list(opt_stats_info.values()), columns=['Optimized'])
 
         ### Constrained
 
@@ -779,6 +788,14 @@ class ParametricPortifolio():
             w_test_opt_constrained, test_r_opt_sequence_constrained, 
             'opt', test_cdi_return, r_test_opt_constrained
             )
+
+        
+        opt_constrained_df = pd.DataFrame(
+            list(opt_constrained_stats_info.values()), 
+            columns=['Optimized_Constrained']
+            )
+
+        stats_df = pd.concat([nn_df, nn_constrained_df, opt_df, opt_constrained_df], axis=1).set_index('Statistic_Name')
 
         import pdb; pdb.set_trace()
 
