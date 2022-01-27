@@ -72,7 +72,6 @@ class ParametricPortifolio():
         base = datetime.datetime.fromtimestamp(788925600)
         # 203 months
         self.timestamp = pd.date_range(base, base + relativedelta(months=+202), freq='MS').strftime("%Y-%b").tolist()
-        # import pdb; pdb.set_trace();
 
         # Train values
         self.mean_obj_r_runs = []
@@ -166,7 +165,6 @@ class ParametricPortifolio():
         self.book_to_mkt_ratio.fillna(method='ffill', inplace=True)
         self.monthly_return.fillna(method='bfill', inplace=True)
         self.monthly_return.fillna(method='ffill', inplace=True)
-        # import pdb; pdb.set_trace()
 
         self.market_cost = compute_transaction_costs(self.data_path)
         self.cdi_return = pd.read_csv(os.path.join(self.data_path, "cdi_return.csv"))
@@ -271,7 +269,6 @@ class ParametricPortifolio():
             firm_characteristics.T.loc[(slice(None), name), :] -= mean_mean
             firm_characteristics.T.loc[(slice(None), name), :] /= mean_std
         
-        # import pdb; pdb.set_trace()
         LOGGER.info("Normalized firm characteristics")
         return firm_characteristics
     
@@ -750,8 +747,8 @@ class ParametricPortifolio():
             w_test_nn, test_r_nn_sequence, 'nn', test_cdi_return, torch_r_test
             )
 
-        nn_df = pd.DataFrame(list(nn_stats_info.values()), columns=['Neural_Network'])
-        nn_df['Statistic_Name'] = list(nn_stats_info.keys())
+        nn_df = pd.DataFrame(list(nn_stats_info.values()), columns=['Neural Network'])
+        nn_df['Statistic Name'] = list(nn_stats_info.keys())
 
         ### Constrained
         test_r_nn_constrained_sequence = test_r_nn_constrained_sequence.detach().numpy()
@@ -763,7 +760,7 @@ class ParametricPortifolio():
 
         nn_constrained_df = pd.DataFrame(
             list(nn_constrained_stats_info.values()), 
-            columns=['Neural_Network_Constrained']
+            columns=['Neural Network Constrained']
             )
 
         ## OPT
@@ -792,12 +789,12 @@ class ParametricPortifolio():
         
         opt_constrained_df = pd.DataFrame(
             list(opt_constrained_stats_info.values()), 
-            columns=['Optimized_Constrained']
+            columns=['Optimized Constrained']
             )
 
-        stats_df = pd.concat([nn_df, nn_constrained_df, opt_df, opt_constrained_df], axis=1).set_index('Statistic_Name')
+        stats_df = pd.concat([nn_df, nn_constrained_df, opt_df, opt_constrained_df], axis=1).set_index('Statistic Name')
 
-        import pdb; pdb.set_trace()
+        stats_df.to_excel('return_statistics.xlsx')
 
 
         # r_test_constrained_sequence
@@ -896,13 +893,13 @@ class ParametricPortifolio():
         for idx_h_w in range(1, r_test.shape[shape_time]):
             w_test_hold[idx_h_w] = return_test_hold[idx_h_w-1] * w_test[idx_h_w-1]
 
-        avg_turnover= np.abs(w_test-w_test_hold).mean(axis=1).mean()*100
+        avg_turnover= np.abs(w_test[1:]-w_test_hold[1:]).mean(axis=shape_stocks).mean()*100
 
         total_diversification = []
         
         for idx_div in range(2, w_test.shape[shape_time]+1):
             diversitfication = w_test[idx_div-1].dot(
-                w_r_test[:idx_div].std(axis=0)) / np.sqrt(
+                w_r_test[:idx_div].std(axis=shape_time)) / np.sqrt(
                     w_test[idx_div-1].dot(
                         np.cov(
                             r_test[:idx_div].T)).dot(
@@ -913,20 +910,19 @@ class ParametricPortifolio():
         
         average_diverstification = np.mean(total_diversification)
 
-        stats_info['test_std']  = np.round(test_std, 4)
-        stats_info['partial_std']  = np.round(partial_std, 4)
-        stats_info['test_kurt']  = np.round(test_kurt, 4)
-        stats_info['test_skew']  = np.round(test_skew, 4)
-        stats_info['average_diverstification']  = np.round(average_diverstification, 4)
-        stats_info['mean_max']  = np.round(mean_max, 4)
-        stats_info['mean_min']  = np.round(mean_min, 4)
-        stats_info['mean_gross_leverage']  = np.round(mean_gross_leverage, 4)
-        stats_info['proportion_leverage']  = np.round(proportion_leverage, 4)
-        stats_info['avg_turnover']  = np.round(avg_turnover, 4)
-        stats_info['excess_return']  = np.round(excess_return, 4)
-        stats_info['cumulative_return']  = np.round(cumulative_return, 4)
-        stats_info['sharpe_ratio']  = np.round(sharpe_ratio, 4)
-
+        stats_info['Standard Deviation (%)']  = np.round(test_std, 4)
+        stats_info['Lower Partial Standard Deviation (%)']  = np.round(partial_std, 4)
+        stats_info['Kurtosis']  = np.round(test_kurt, 4)
+        stats_info['Skewness']  = np.round(test_skew, 4)
+        stats_info['Average Diversification Ratio']  = np.round(average_diverstification, 4)
+        stats_info['Average Max. Weight']  = np.round(mean_max, 4)
+        stats_info['Average Min. Weight']  = np.round(mean_min, 4)
+        stats_info['Average Gross Leverage']  = np.round(mean_gross_leverage, 4)
+        stats_info['Proportion of Leverage (%)']  = np.round(proportion_leverage, 4)
+        stats_info['Average Turnover (%)']  = np.round(avg_turnover, 4)
+        stats_info['Average Excess Return (%)']  = np.round(excess_return, 4)
+        stats_info['Cumulative Return (%)']  = np.round(cumulative_return, 4)
+        stats_info['Sharpe Ratio']  = np.round(sharpe_ratio, 4)
         return stats_info
 
     
@@ -941,7 +937,6 @@ class ParametricPortifolio():
         w_nn_constrained = torch.Tensor(constrain_weights(w_nn.detach().numpy().T).T)
         r_nn_constrained_sequence = torch.sum((w_nn_constrained*torch_r[1:]), dim=1)
 
-        # import pdb; pdb.set_trace()
         w = np.empty(shape=(number_of_stocks, len(data_size)))
         for i in range(number_of_stocks):
             firm_df = firm_characteristics[i].copy()
@@ -966,7 +961,6 @@ class ParametricPortifolio():
         lower_idx = data_size[1]
         upper_idx = data_size[-1]+1
         
-        # import pdb;pdb.set_trace()
         df = pd.DataFrame(r_nn_constrained_sequence.unsqueeze(0).detach().numpy(), columns=self.timestamp[lower_idx:upper_idx] )
         df = df.append(
             pd.DataFrame(

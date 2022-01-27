@@ -182,8 +182,8 @@ def compute_transaction_costs(data_path):
 
     volumes = pd.read_csv(os.path.join(data_path , 'monthly_volume.csv'))
     comission = 0.0004
-    uk_variable1 = 0.002
-    uk_variable2 = 0.01
+    min_tax = 0.002
+    max_tax = 0.01
 
     market_cost = np.ones_like(volumes)*comission
     market_cost.shape
@@ -196,9 +196,9 @@ def compute_transaction_costs(data_path):
     for t in range(T):
         x.iloc[t] = (x.iloc[t] - min_[t])/(max_[t] - min_[t])
     x.fillna(0, inplace=True)
-    x = x * (uk_variable1 - uk_variable2)
+    x = x * (min_tax - max_tax)
 
-    liq_cost = np.ones_like(x)*uk_variable2 + x
+    liq_cost = np.ones_like(x)*max_tax + x
     market_cost += liq_cost
     market_cost = 1-market_cost
     market_cost = market_cost
