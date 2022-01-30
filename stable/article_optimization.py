@@ -563,7 +563,7 @@ class ParametricPortifolio():
             
             if i%100==0:
                 theta = portifolio.weights.state_dict()['weight'].detach().numpy()
-                LOGGER.debug(f"i:{i}, theta i: {theta}, f(theta):{loss.item()},  Return_mean:{mean_r_p}, Return_std{std_r_p}")
+                LOGGER.debug(f"i:{i}, theta i: {theta}, f(theta):{loss.item()},  Return_mean:{mean_r_p}, Return_std:{std_r_p}")
 
             return_values_mean.append(mean_r_p)
             return_values_std.append(std_r_p)
