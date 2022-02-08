@@ -212,6 +212,7 @@ class ParametricPortifolioNN(nn.Module):
         # self.second_layer = nn.Linear(3,3)
         self.weights = nn.Linear(3,1, bias=False)
         self.relu = nn.ReLU()
+        self.lrelu = nn.LeakyReLU()
         self.benchmark = benchmark
         self.return_ = return_
         self.risk_constant = risk_constant
@@ -240,7 +241,7 @@ class ParametricPortifolioNN(nn.Module):
         """
         # x = F.relu(self.first_layer(x))
         # x = F.relu(self.second_layer(x))
-        x = F.relu(self.weights(x))
+        x = self.lrelu(self.weights(x))
         x = x.squeeze(-1) * (1/self.number_of_stocks)
         x = x + self.benchmark
         r = x*self.return_

@@ -155,6 +155,7 @@ class ParametricPortifolio():
         self.monthly_return = pd.read_csv(os.path.join(self.data_path, "monthly_return.csv"))
         self.lreturn.fillna(method='bfill', inplace=True)
         self.lreturn.fillna(method='ffill', inplace=True)
+        self.value_weighted = (self.mcap.T/self.mcap.sum(axis=1)).T
         self.mcap = np.log(self.mcap)
         self.mcap[self.mcap==-np.inf] = 0
         self.mcap.fillna(method='bfill', inplace=True)
@@ -658,7 +659,9 @@ class ParametricPortifolio():
         firm_characteristics_test, r_test, time_test, number_of_stocks = self.create_characteristics(test_me, test_mom, test_btm, test_return)
 
         #### CREATE BENCHMARK FOR TESTING
-        w_benchmark_test = create_w_benchmark(number_of_stocks, time_test)
+        # w_benchmark_test = create_w_benchmark(number_of_stocks, time_test)
+        w_benchmark_test = self.value_weighted.iloc[test].T.to_numpy()
+        import pdb; pdb.set_trace()
 
         ### Create NN Variables
         torch_characteristics_test, torch_r_test, torch_benchmark_test  = convert_to_nn_variables(firm_characteristics_test, r_test, w_benchmark_test)
@@ -1069,8 +1072,10 @@ class ParametricPortifolio():
             firm_characteristics_val, r_val, time_val, number_of_stocks = self.create_characteristics(val_me, val_mom, val_btm, val_return)
 
             ### Creating weights to a benchmark portifolio using uniform weighted returns
-            w_benchmark = create_w_benchmark(number_of_stocks, time)
-            w_benchmark_val = create_w_benchmark(number_of_stocks, time_val)
+            w_benchmark = self.value_weighted.iloc[train].T.to_numpy()
+            w_benchmark_val = self.value_weighted.iloc[val].T.to_numpy()
+            # w_benchmark = create_w_benchmark(number_of_stocks, time)
+            # w_benchmark_val = create_w_benchmark(number_of_stocks, time_val)
 
             torch_characteristics, torch_r, torch_benchmark  = convert_to_nn_variables(firm_characteristics, r, w_benchmark)
             torch_characteristics_val, torch_r_val, torch_benchmark_val  = convert_to_nn_variables(
