@@ -117,12 +117,12 @@ class ParametricPortifolio():
         self.weights_computed = {'optimized':[], 'optimized_constrained':[], 'nn_optimized':[], 'nn_optimized_constrained':[]}
 
         self.results_comparison = {}
-        comparison_fields = ["cdi", "ibov"]
-        calculated_fields = ["nn", "nn_constraint", "opt", "opt_constraint"]
+        # comparison_fields = ["cdi", "ibov"]
+        # calculated_fields = ["nn", "nn_constraint", "opt", "opt_constraint"]
 
-        for comp_field in comparison_fields:
-            for cal_field in calculated_fields:
-                self.results_comparison[f"{cal_field}_{comp_field}_comparison"] = {}
+        # for comp_field in comparison_fields:
+        #     for cal_field in calculated_fields:
+        #         self.results_comparison[f"{cal_field}_{comp_field}_comparison"] = {}
 
     # TO-DO: Change it to load any number of characteristics
     def load_data(self):
@@ -344,6 +344,7 @@ class ParametricPortifolio():
                 w[i] = w_benchmark[i].copy() + (1/number_of_stocks)*theta.dot(firm_characteristics[i].copy().T)
             return -np.mean(np.sum(utility_function(risk_constant, w[:,:-1]*r[:,1:]), axis=0))
         
+        # import pdb; pdb.set_trace()
         mean_obj_r = []
         mean_obj_r_val = []
         mean_r = []
@@ -536,29 +537,50 @@ class ParametricPortifolio():
         min_loss_val = 0
         loss_values = []
         return_values_mean = []
+        return_values_mean_constrained = []
         return_values_std = []
+        return_values_std_constrained = []
 
         loss_values_val =[]
         return_values_mean_val = []
+        return_values_mean_val_constrained = []
         return_values_std_val = []
+        return_values_std_val_constrained = []
         for i in range(epochs_size):
             opt.zero_grad()
             value, r_ = portifolio(torch_characteristics[:-1])
             loss = loss_fn(value)
             loss_values.append(loss.item())
-            r_p = torch.sum(r_,-1)
+            # r_p = torch.sum(r_,-1)
+            w_train_nn = portifolio.weights(torch_characteristics[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark[:-1]
+            w_train_nn_constrained = torch.Tensor(constrain_weights(w_train_nn.detach().numpy().T).T)
+            r_p = torch.sum((w_train_nn*torch_r[1:]), dim=1)
+            r_p_constrained = torch.sum((w_train_nn_constrained*torch_r[1:]), dim=1)
+
             mean_r_p = torch.mean(r_p).detach().numpy()
             std_r_p = torch.std(r_p).detach().numpy()
+            mean_r_p_constrained = torch.mean(r_p_constrained).detach().numpy()
+            std_r_p_constrained = torch.std(r_p_constrained).detach().numpy()
 
             portifolio_val.weights = portifolio.weights
             value_val, r_val = portifolio_val(torch_characteristics_val[:-1])
             loss_val = loss_fn(value_val)
-            r_p_val = torch.sum(r_val,-1)
+            # r_p_val = torch.sum(r_val,-1)
+            w_val_nn = portifolio_val.weights(torch_characteristics_val[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark_val[:-1]
+            w_val_nn_constrained = torch.Tensor(constrain_weights(w_val_nn.detach().numpy().T).T)
+            r_p_val = torch.sum((w_val_nn*torch_r_val), dim=1)
+            r_p_val_constrained = torch.sum((w_val_nn_constrained*torch_r_val), dim=1)
+
+
             mean_r_p_val = torch.mean(r_p_val).detach().numpy()
             std_r_p_val = torch.std(r_p_val).detach().numpy()
+            mean_r_p_val_constrained = torch.mean(r_p_val_constrained).detach().numpy()
+            std_r_p_val_constrained = torch.std(r_p_val_constrained).detach().numpy()
 
             return_values_mean_val.append(mean_r_p_val)
             return_values_std_val.append(std_r_p_val)
+            return_values_mean_val_constrained.append(mean_r_p_val_constrained)
+            return_values_std_val_constrained.append(std_r_p_val_constrained)
             loss_values_val.append(loss_val.item())
                 
             
@@ -568,6 +590,8 @@ class ParametricPortifolio():
 
             return_values_mean.append(mean_r_p)
             return_values_std.append(std_r_p)
+            return_values_mean_constrained.append(mean_r_p_constrained)
+            return_values_std_constrained.append(std_r_p_constrained)
             loss.backward()
             opt.step()
 
@@ -607,10 +631,12 @@ class ParametricPortifolio():
 
         self.nn_loss = loss_values
         self.nn_return = return_values_mean
+        self.nn_return_constrained = return_values_mean_constrained
         self.nn_return_std = return_values_std
     
         self.nn_val_loss = loss_values_val
         self.nn_val_return = return_values_mean_val
+        self.nn_val_return_constrained = return_values_mean_val_constrained
         self.nn_val_return_std = return_values_std_val
     
 
@@ -661,7 +687,6 @@ class ParametricPortifolio():
         #### CREATE BENCHMARK FOR TESTING
         # w_benchmark_test = create_w_benchmark(number_of_stocks, time_test)
         w_benchmark_test = self.value_weighted.iloc[test].T.to_numpy()
-        import pdb; pdb.set_trace()
 
         ### Create NN Variables
         torch_characteristics_test, torch_r_test, torch_benchmark_test  = convert_to_nn_variables(firm_characteristics_test, r_test, w_benchmark_test)
@@ -1122,7 +1147,8 @@ class ParametricPortifolio():
             firm_characteristics_global, r_global, time_global, number_of_stocks = self.create_characteristics(
             me, mom, btm, return_
             )
-            w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
+            # w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
+            w_benchmark_global = self.value_weighted.T.to_numpy()
             torch_characteristics_global, torch_r_global, torch_benchmark_global  = convert_to_nn_variables(
                 firm_characteristics_global, r_global, w_benchmark_global
                 )
@@ -1240,7 +1266,7 @@ class ParametricPortifolio():
         ### TRAIN PLOTS ###
 
         plt.figure(figsize=(12,9))
-        plt.title("Mean objective return for each optimization step")
+        plt.title("Mean utility function for each optimization step")
         for run, mean_obj_r in enumerate(mean_obj_r_runs):
             x = range(len(mean_obj_r))
             plt.plot(x, mean_obj_r, label=f'Objective return, Run:{run+1}', c=colors[run])
@@ -1249,7 +1275,7 @@ class ParametricPortifolio():
         plt.ylabel('Objective return')
         plt.legend()
         plt.grid()
-        plt.savefig(f'./{experiment_label}_objective_return_over_steps.jpg')
+        plt.savefig(f'./{experiment_label}_utility_function_over_steps.jpg')
         
         plt.close()
 
@@ -1261,9 +1287,15 @@ class ParametricPortifolio():
             plt.plot(x, [benchmark_mean_return_runs[run]]*len(mean_r), label=f'Benchmark return, Run:{run+1}', c=colors[run], linestyle='dashed')
             plt.plot(x, mean_constrained_r_runs[run], label=f'Optimized return with weight constraints, Run:{run+1}', c=colors[run], linestyle='dotted')
             plt.plot(x, mean_constrained_transaction_r_runs[run], label=f'Optimized return with weight constraints and transaction costs, Run:{run+1}', c=colors[run], linestyle='dashdot')
+            plt.plot(x, self.mean_r_val, label=f'Optimized validation return, Run:{run+1}', c=colors[run+1])
+
+            plt.text(x[-1], mean_r[-1]*1.01, f'In sample \nreturn: {mean_r[-1]:.3f}%')
+            plt.text(x[-1], mean_constrained_r_runs[run][-1]*1.01, f'In sample constrained return: \n{mean_constrained_r_runs[run][-1]:.3f}%')
+            plt.text(x[-1], self.mean_r_val[-1]*0.95, f'In sample validation \nreturn: {self.mean_r_val[-1]:.3f}%')
         plt.xlabel('Iteration step')
         plt.ylabel('Mean return')
-        plt.legend()
+        plt.legend(loc="lower left")
+        # plt.legend()
         plt.grid()
         plt.savefig(f'./{experiment_label}_mean_return_over_steps.jpg')
         
@@ -1276,6 +1308,13 @@ class ParametricPortifolio():
             x = range(len(mean_r))
             plt.plot(x, mean_r, label=f'Optimized return, Run:{run+1}', c=colors[run])
             plt.plot(x, self.nn_val_return_runs[run], label=f'Optimized validation return, Run:{run+1}', c=colors[run+1])
+            plt.plot(x, self.nn_return_constrained, label=f'Optimized constrained return, Run:{run+1}', c=colors[run+2])
+            plt.plot(x, self.nn_val_return_constrained, label=f'Optimized constrained validation return, Run:{run+1}', c=colors[run+3])
+
+            plt.text(x[-1], mean_r[-1]*1.01, f'In sample return: \n{mean_r[-1]:.3f}%')
+            plt.text(x[-1], self.nn_val_return_runs[run][-1]*1.01, f'Validation return: \n{self.nn_val_return_runs[run][-1]:.3f}%')
+            plt.text(x[-1], self.nn_return_constrained[-1]*1.01, f'In sample constrained \nreturn: {self.nn_return_constrained[-1]:.3f}%')
+            plt.text(x[-1], self.nn_val_return_constrained[-1]*1.01, f'Validation constrained \nreturn: {self.nn_val_return_constrained[-1]:.3f}%')
         plt.ylabel("Mean return")
         plt.xlabel("Epochs")
         plt.legend()
@@ -1413,13 +1452,14 @@ class ParametricPortifolio():
 
         #### COMPARISON WITH IBOV AND SELIC/CDI ######
         comparison_fields = ["cdi", "ibov"]
-        calculated_fields = ["nn", "nn_constraint", "opt", "opt_constraint"]
-
+        calculated_fields = ["nn_constraint", "opt_constraint"]
+        
+        # import pdb; pdb.set_trace()
         for comp_field in comparison_fields:
             for cal_field in calculated_fields:
                 plt.figure(figsize=(12,9))
                 plt.title(f"Comparisson between {cal_field} and {comp_field} results.")
-                y = self.results_comparison[f"{cal_field}_{comp_field}_comparison"]
+                y = self.results_comparison[f"test_{cal_field}_{comp_field}_comparison"]
                 x = range(len(y))
                 plt.ylabel("Difference between return")
                 plt.xlabel("Month on test set")
