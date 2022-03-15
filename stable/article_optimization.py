@@ -1,21 +1,23 @@
-import json
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from tqdm.notebook import tqdm
-from collections import defaultdict
-from scipy.optimize import minimize
 import datetime
-from dateutil.relativedelta import relativedelta
-import time as tm
 import os
 import logging
-from matplotlib import cm
+import json
 import torch
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import torch.nn as nn
+import time as tm
+import matplotlib.pyplot as plt
+from collections import defaultdict
+from matplotlib import animation
+from matplotlib import cm
 from ray import tune
-from ray.tune.suggest.bayesopt import BayesOptSearch
+from dateutil.relativedelta import relativedelta
+from tqdm.notebook import tqdm
+from scipy.optimize import minimize
 from scipy.stats import kurtosis, skew
+from ray.tune.suggest.bayesopt import BayesOptSearch
 
 torch.random.manual_seed(123)
 os.environ['RAY_DISABLE_IMPORT_WARNING'] = '1'
@@ -344,7 +346,6 @@ class ParametricPortifolio():
                 w[i] = w_benchmark[i].copy() + (1/number_of_stocks)*theta.dot(firm_characteristics[i].copy().T)
             return -np.mean(np.sum(utility_function(risk_constant, w[:,:-1]*r[:,1:]), axis=0))
         
-        # import pdb; pdb.set_trace()
         mean_obj_r = []
         mean_obj_r_val = []
         mean_r = []
@@ -546,6 +547,8 @@ class ParametricPortifolio():
         return_values_mean_val_constrained = []
         return_values_std_val = []
         return_values_std_val_constrained = []
+        self.nn_weight_list = []
+        self.nn_weight_list_constrained = []
         for i in range(epochs_size):
             opt.zero_grad()
             value, r_ = portifolio(torch_characteristics[:-1])
@@ -554,6 +557,9 @@ class ParametricPortifolio():
             # r_p = torch.sum(r_,-1)
             w_train_nn = portifolio.weights(torch_characteristics[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark[:-1]
             w_train_nn_constrained = torch.Tensor(constrain_weights(w_train_nn.detach().numpy().T).T)
+            self.nn_weight_list.append(w_train_nn.detach().numpy())
+            self.nn_weight_list_constrained.append(w_train_nn_constrained.detach().numpy())
+
             r_p = torch.sum((w_train_nn*torch_r[1:]), dim=1)
             r_p_constrained = torch.sum((w_train_nn_constrained*torch_r[1:]), dim=1)
 
@@ -1209,6 +1215,34 @@ class ParametricPortifolio():
 
             LOGGER.info("Finished experiment.")
     
+    def plot_animated_heatmap(self, weight_list, weight_type, experiment_label):
+        """
+        Plot animated heatmap from weights over epochs
+        """
+        plt.rcParams["figure.figsize"] = [12, 9]
+        plt.rcParams["figure.autolayout"] = True
+
+        fig = plt.figure()
+        first_weight = weight_list[0]
+        dimension = first_weight.shape
+        epochs = len(weight_list)//10
+        min_w = min([w.min() for w in weight_list])
+        max_w = max([w.max() for w in weight_list])
+        ax = plt.axes()
+        sns.heatmap(first_weight, vmax=max_w, vmin=min_w, ax=ax)
+        LOGGER.info(f"Generating animated heatmap from {weight_type} with {epochs} frames")
+
+        def init():
+            sns.heatmap(np.zeros(dimension), vmax=max_w, vmin=min_w, cbar=False, ax=ax)
+
+        def animate(i):
+            data = weight_list[i*10]
+            sns.heatmap(data, vmax=max_w, vmin=min_w, cbar=False, ax=ax)
+            ax.set_title(f"Epoch: {i*10}")
+        
+        anim = animation.FuncAnimation(fig, animate, init_func=init, frames=epochs, repeat=False)
+        writer = animation.PillowWriter(fps=30)
+        anim.save(f'./{experiment_label}_{weight_type}_heatmap_weights.gif', writer=writer)
 
     def plot_final_results(self, experiment_label):
         """
@@ -1264,6 +1298,8 @@ class ParametricPortifolio():
         }
 
         ### TRAIN PLOTS ###
+        self.plot_animated_heatmap(self.nn_weight_list, 'nn', experiment_label)
+        self.plot_animated_heatmap(self.nn_weight_list_constrained, 'nn_constrained', experiment_label)
 
         plt.figure(figsize=(12,9))
         plt.title("Mean utility function for each optimization step")
@@ -1454,7 +1490,6 @@ class ParametricPortifolio():
         comparison_fields = ["cdi", "ibov"]
         calculated_fields = ["nn_constraint", "opt_constraint"]
         
-        # import pdb; pdb.set_trace()
         for comp_field in comparison_fields:
             for cal_field in calculated_fields:
                 plt.figure(figsize=(12,9))
