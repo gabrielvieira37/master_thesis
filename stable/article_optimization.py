@@ -66,6 +66,8 @@ class ParametricPortifolio():
         self.l2_regularization = l2_regularization
         self.epochs_size = epochs_size
 
+        self.benchmark_type = 'value_weighted'
+
         self.training = True
         self.mean_mean = {}
         self.mean_std = {}
@@ -119,6 +121,7 @@ class ParametricPortifolio():
         self.weights_computed = {'optimized':[], 'optimized_constrained':[], 'nn_optimized':[], 'nn_optimized_constrained':[]}
 
         self.results_comparison = {}
+
         # comparison_fields = ["cdi", "ibov"]
         # calculated_fields = ["nn", "nn_constraint", "opt", "opt_constraint"]
 
@@ -133,46 +136,73 @@ class ParametricPortifolio():
 
         Parameters
         ----------
-        data_path: str
+        self.data_path: str
             The path where data are.
 
         Returns
         -------
-        lreturn: pandas.DataFrame
+        self.lreturn: pandas.DataFrame
             Lagged return of the firms.
 
-        mcap: pandas.DataFrame
+        self.mcap: pandas.DataFrame
             Market capitalization of the firms
 
-        book_to_mkt_ratio: pandas.DataFrame
+        self.book_to_mkt_ratio: pandas.DataFrame
             Book to market ratio of the firms
 
-        monthly_return: pandas.DataFrame
+        self.monthly_return: pandas.DataFrame
             Monthly return of the firms.
 
+        self.market_cost: pandas.DataFrame
+            Market cost using market volume
+
+        self.value_weighted: pandas.DataFrame
+            Value weighted benchmark using market cap
+
+        self.cdi_return: pandas.DataFrame
+            CDI return from data time range
+
+        self.ibov_return: pandas.DataFrame
+            IBOV return from data time range
         """
+        # lagged_return
         self.lreturn = pd.read_csv(os.path.join(self.data_path, "monthly_lagged_return.csv"))
         self.mcap = pd.read_csv(os.path.join(self.data_path, "monthly_market_cap.csv"))
         self.book_to_mkt_ratio = pd.read_csv(os.path.join(self.data_path, "monthly_book_to_mkt_ratio.csv"))
         self.monthly_return = pd.read_csv(os.path.join(self.data_path, "monthly_return.csv"))
+        # fill nan values with values coming from latter days
         self.lreturn.fillna(method='bfill', inplace=True)
+        # fill nan values with values coming from prior days
         self.lreturn.fillna(method='ffill', inplace=True)
+
+        # value weighted benchmark is the weighted by the market cap
         self.value_weighted = (self.mcap.T/self.mcap.sum(axis=1)).T
+
+        # market cap characteristic uses log in order to reduce its magnitude
         self.mcap = np.log(self.mcap)
+        # if it has negative infinite, means it was 0 so we change it to 0 again
         self.mcap[self.mcap==-np.inf] = 0
+
+        # Same processing from lagged return
         self.mcap.fillna(method='bfill', inplace=True)
         self.mcap.fillna(method='ffill', inplace=True)
+
+        # Add 1 and log to btm characteristic to be similar to Brandt. et al. article
         self.book_to_mkt_ratio = np.log(1+self.book_to_mkt_ratio)
         self.book_to_mkt_ratio[self.book_to_mkt_ratio==-np.inf] = 0
         self.book_to_mkt_ratio.fillna(method='bfill', inplace=True)
         self.book_to_mkt_ratio.fillna(method='ffill', inplace=True)
+
+        # Same processing from lagged return
         self.monthly_return.fillna(method='bfill', inplace=True)
         self.monthly_return.fillna(method='ffill', inplace=True)
 
+        # Compute market cost based on market volume
         self.market_cost = compute_transaction_costs(self.data_path)
+        # Load cdi information from data time range
         self.cdi_return = pd.read_csv(os.path.join(self.data_path, "cdi_return.csv"))
+        # Load ibov information from data time range
         self.ibov_return = pd.read_csv(os.path.join(self.data_path, "ibov_return.csv"))
-
         LOGGER.info("Loaded data successfully")
     
     # TO-DO: Change it to create any number of characteristics
@@ -256,27 +286,24 @@ class ParametricPortifolio():
 
 
         # Normalization using mean and std of each feature to make its sum going to zero each time step.
-        # Normalize within cross-section
+        # Normalize within cross-section of stocks
         LOGGER.info(f"IsTraining: {self.training}")
         for name in characteristics_names:
             #Normalize firm characteristics for all stocks
-            # if self.training == True:
-            mean_mean = firm_characteristics.T.loc[(slice(None), name), :].mean()
-            mean_std = firm_characteristics.T.loc[(slice(None), name), :].std()
-            #     self.mean_mean[name] = mean_mean
-            #     self.mean_std[name] = mean_std
+            mean_charac = firm_characteristics.T.loc[(slice(None), name), :].mean()
+            std_charac = firm_characteristics.T.loc[(slice(None), name), :].std()
 
-            # mean_mean = self.mean_mean[name]
-            # mean_std = self.mean_std[name]
-
-            firm_characteristics.T.loc[(slice(None), name), :] -= mean_mean
-            firm_characteristics.T.loc[(slice(None), name), :] /= mean_std
+            firm_characteristics.T.loc[(slice(None), name), :] -= mean_charac
+            firm_characteristics.T.loc[(slice(None), name), :] /= std_charac
         
         LOGGER.info("Normalized firm characteristics")
         return firm_characteristics
     
 
-    def optimizing_step(self, firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark, firm_characteristics_val, r_val, time_val, w_benchmark_val):
+    def optimizing_step(
+        self, 
+        firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark,
+        firm_characteristics_val, r_val, time_val, w_benchmark_val):
         """
         Find the coefficient theta that best maps the firm characteristics and the returns.
 
@@ -284,42 +311,60 @@ class ParametricPortifolio():
         ----------
         firm_characteristics: pandas.DataFrame
             Normalized firm characteristcs dataframe.
+
         r: numpy.array
             Return of the stocks through time.
+
         time: int
             Number of time periods this slice of firm characterists are evaluating.
+
         number_of_stocks: int
             Number of stocks that we created the firm characteristics dataframe.
+
         theta0: numpy.array
             Initial coefficients mapping the return and the firm characteristics.
-        risk_constant: int
-            Risk constant, increase it to become more risk averse.
+
         w_benchmark: numpy.array
             Benchmark weights, used to create optimized weights.
+
         transaction_cost: float
             Define transaction cost.
+
         firm_characteristics_val: pandas.DataFrame
+            Normalized firm characteristcs dataframe from validation period.
 
         r_val: numpy.array
+            Return of the stocks through time from validation period.
 
         time_val: int
+            Number of time periods this slice of firm characterists are evaluating on validation period.
 
         w_benchmark_val: numpy.array
+            Benchmark weights, used to create optimized weights using validation period.
+
+        self.risk_constant: int
+            Risk constant, increase it to become more risk averse.
 
         Returns
         -------
         self.sol: scipy.optimize.OptimizeResult
             Solution object used to retrieve theta optimized and optimization information.
+
         self.mean_obj_r: [float, ]
             List of objective values through each optimization step.
+
         self.mean_r: [float, ]
             List of return using optimized weights through each optimization step.
+
         self.mean_obj_r_val: [float, ]
             List of objective validation values through each optimization step.
+
         self.mean_r_val: [float, ]
             List of validation return using optimized weights through each optimization step.
+
         self.mean_constrained_r: [float, ]
             List of return constrained using weights with 30% of leverage.
+
         self.mean_constrained_transaction_r: [float, ]
             List of return constrained adding transaction costs.
         """
@@ -400,9 +445,16 @@ class ParametricPortifolio():
         ----------
         self.nn_optimizer: function
             Function to perform portifolio optimization using neural networks.
+
         self.torch_characteristics: torch.Tensor
+            Firm characteristics transformed to tensor and having shape
+            of (characteristics size, time, number of stocks) instead of
+            (number of stocks, time, characteristics size).
 
         self.torch_r: torch.Tensor
+            Return of the stocks through time. Changed shape
+            to be (time, number of stocks) instead of original
+            (number of stocks, time).
 
         self.torch_benchmark: torch.Tensor
 
@@ -437,7 +489,8 @@ class ParametricPortifolio():
             torch_characteristics_val, torch_r_val, torch_benchmark_val, config
             )
         
-        # Last epoch results
+        # Last epoch results, retrieving it from object parameters.
+        # Function nn optmizer saves those results in object parameters.
         mean_loss = self.nn_val_loss[-1]
         mean_return =  self.nn_val_return[-1]
         mean_std = self.nn_val_return_std[-1]
@@ -691,8 +744,10 @@ class ParametricPortifolio():
         firm_characteristics_test, r_test, time_test, number_of_stocks = self.create_characteristics(test_me, test_mom, test_btm, test_return)
 
         #### CREATE BENCHMARK FOR TESTING
-        # w_benchmark_test = create_w_benchmark(number_of_stocks, time_test)
-        w_benchmark_test = self.value_weighted.iloc[test].T.to_numpy()
+        if self.benchmark_type == 'value_weighted':
+            w_benchmark_test = self.value_weighted.iloc[test].T.to_numpy()
+        else:
+            w_benchmark_test = create_w_benchmark(number_of_stocks, time_test)
 
         ### Create NN Variables
         torch_characteristics_test, torch_r_test, torch_benchmark_test  = convert_to_nn_variables(firm_characteristics_test, r_test, w_benchmark_test)
@@ -709,6 +764,7 @@ class ParametricPortifolio():
         self.weights_computed['nn_optimized'].append(w_test_nn.detach().numpy().T)
         self.weights_computed['nn_optimized_constrained'].append(w_test_nn_constrained.detach().numpy().T)
 
+        ## Create nn return sequence to be used after
         test_r_nn_sequence = torch.sum((w_test_nn*torch_r_test), dim=1)
         self.test_r_nn = torch.mean(test_r_nn_sequence).detach().numpy()
         self.test_r_nn_std = torch.std(test_r_nn_sequence).detach().numpy()
@@ -718,10 +774,6 @@ class ParametricPortifolio():
         self.test_r_nn_constrained_transaction = torch.mean(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
         self.test_r_nn_constrained_transaction_std = torch.std(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
 
-        # leverage_mask = w_test_nn<0
-        # leverage = (w_test_nn*leverage_mask).sum(axis=1)
-        # min_values, min_idxs = w_test_nn.min(axis=1)
-        # max_values, max_idxs = w_test_nn.max(axis=1)
 
         # Get weight from t and return from t+1
         benchmark_r_test_series=pd.Series(np.sum(w_benchmark_test[:,:-1]*r_test[:,1:], axis=0)).describe()
@@ -1103,10 +1155,10 @@ class ParametricPortifolio():
             firm_characteristics_val, r_val, time_val, number_of_stocks = self.create_characteristics(val_me, val_mom, val_btm, val_return)
 
             ### Creating weights to a benchmark portifolio using uniform weighted returns
-            w_benchmark = self.value_weighted.iloc[train].T.to_numpy()
-            w_benchmark_val = self.value_weighted.iloc[val].T.to_numpy()
-            # w_benchmark = create_w_benchmark(number_of_stocks, time)
-            # w_benchmark_val = create_w_benchmark(number_of_stocks, time_val)
+            # w_benchmark = self.value_weighted.iloc[train].T.to_numpy()
+            # w_benchmark_val = self.value_weighted.iloc[val].T.to_numpy()
+            w_benchmark = create_w_benchmark(number_of_stocks, time)
+            w_benchmark_val = create_w_benchmark(number_of_stocks, time_val)
 
             torch_characteristics, torch_r, torch_benchmark  = convert_to_nn_variables(firm_characteristics, r, w_benchmark)
             torch_characteristics_val, torch_r_val, torch_benchmark_val  = convert_to_nn_variables(
@@ -1153,8 +1205,8 @@ class ParametricPortifolio():
             firm_characteristics_global, r_global, time_global, number_of_stocks = self.create_characteristics(
             me, mom, btm, return_
             )
-            # w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
-            w_benchmark_global = self.value_weighted.T.to_numpy()
+            w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
+            # w_benchmark_global = self.value_weighted.T.to_numpy()
             torch_characteristics_global, torch_r_global, torch_benchmark_global  = convert_to_nn_variables(
                 firm_characteristics_global, r_global, w_benchmark_global
                 )
@@ -1298,8 +1350,8 @@ class ParametricPortifolio():
         }
 
         ### TRAIN PLOTS ###
-        self.plot_animated_heatmap(self.nn_weight_list, 'nn', experiment_label)
-        self.plot_animated_heatmap(self.nn_weight_list_constrained, 'nn_constrained', experiment_label)
+        # self.plot_animated_heatmap(self.nn_weight_list, 'nn', experiment_label)
+        # self.plot_animated_heatmap(self.nn_weight_list_constrained, 'nn_constrained', experiment_label)
 
         plt.figure(figsize=(12,9))
         plt.title("Mean utility function for each optimization step")
@@ -1503,7 +1555,6 @@ class ParametricPortifolio():
                 plt.savefig(f'./{experiment_label}_comparison_{cal_field}_{comp_field}.jpg')
         
         LOGGER.info("Saved plots in folder.")
-
 
 
     def _start(self):
