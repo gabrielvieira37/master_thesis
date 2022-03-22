@@ -1,4 +1,5 @@
 import datetime
+import warnings
 import os
 import logging
 import json
@@ -39,6 +40,10 @@ handler.setFormatter(formatter)
 LOGGER.addHandler(handler)
 logging.getLogger("ray.tune").setLevel(logging.ERROR)
 logging.getLogger("ray.tune.suggest.bayesopt").setLevel(logging.ERROR)
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", "divide by zero encountered in true_divide")
+
 
 class ParametricPortifolio():
     """
@@ -287,7 +292,6 @@ class ParametricPortifolio():
 
         # Normalization using mean and std of each feature to make its sum going to zero each time step.
         # Normalize within cross-section of stocks
-        LOGGER.info(f"IsTraining: {self.training}")
         for name in characteristics_names:
             #Normalize firm characteristics for all stocks
             mean_charac = firm_characteristics.T.loc[(slice(None), name), :].mean()
@@ -452,19 +456,30 @@ class ParametricPortifolio():
             (number of stocks, time, characteristics size).
 
         self.torch_r: torch.Tensor
-            Return of the stocks through time. Changed shape
+            Return of the stocks through training period. Changed shape
             to be (time, number of stocks) instead of original
             (number of stocks, time).
 
         self.torch_benchmark: torch.Tensor
+            Benchmark weights for training period. Using
+            shape (time, number of stocks) instead of original
+            (number of stocks, time).
 
         self.number_of_stocks: Int
+            Number of stocks to be used in this experiment
 
         self.torch_characteristics_val: torch.Tensor
+            Firm characteristics from validation period
+            transformed to tensor . Same shape change 
+            from training period applies.
 
         self.torch_r_val: torch.Tensor
+            Return of the stocks through validation period. 
+            Same shape change from training period applies.
 
         self.torch_benchmark_val: torch.Tensor
+            Benchmark weights for validation period. Same
+            shape change from training period applies.
             
         config: Dict
             Dictionary containing all hyperparameters to be used.
@@ -495,6 +510,10 @@ class ParametricPortifolio():
         mean_return =  self.nn_val_return[-1]
         mean_std = self.nn_val_return_std[-1]
 
+        # Saving objective function from validation
+        # as the *mean_loss*. This is done in order to
+        # optimize the hyperparameters based in
+        # validation period results.
         tune.report(
             mean_return=mean_return,
             mean_sharpe_ratio=mean_return/mean_std,
@@ -520,6 +539,8 @@ class ParametricPortifolio():
 
         LOGGER.info("Started NN hyperparameter optimization.")
         
+        # Dict with range of hyperparemters
+        # TO-DO: Change it to use a variable from init
         config = {        
             'learning_rate':tune.uniform(0.01, 0.1),
             'l2_regularization':tune.uniform(1e-7, 1e-2),
@@ -529,10 +550,19 @@ class ParametricPortifolio():
             'patience':tune.uniform(2, 10),
         }
 
+        # Max 10 iterations displayed each time
         reporter = tune.CLIReporter(max_progress_rows=10)
+
+        # Add mean return and sharpe ratio 
+        # as parameters to checked
         reporter.add_metric_column("mean_return")
         reporter.add_metric_column("mean_sharpe_ratio")
+
+        # Using baysean optimization
         bayesopt = BayesOptSearch(verbose=0)
+
+        # Using 100 different samples to find the best 
+        # hyperparameter configuration
         analysis = tune.run(
             self.nn_hyperparameter_optimizer, config=config, progress_reporter=reporter, search_alg=bayesopt,
             num_samples=100, metric="mean_loss", mode="min", verbose=0
@@ -543,29 +573,91 @@ class ParametricPortifolio():
         LOGGER.info(f"Best NN config: {best_config}")
         return best_config
 
-    def nn_optimizer(self, torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val, config):
+    def nn_optimizer(
+        self,
+        torch_characteristics, torch_r, torch_benchmark, number_of_stocks,
+        torch_characteristics_val, torch_r_val, torch_benchmark_val, config):
         """
         Optimize and fing theta using a neural network. Theta is the weights of the optimized NN.
 
         Parameters
         ----------
-        torch_characteristics:
-        torch_r, torch_benchmark:
-        number_of_stocks:
-        torch_characteristics_val:
-        torch_r_val:
-        torch_benchmark_val:
-        config:
+        torch_characteristics: torch.Tensor
+            Firm characteristics transformed to tensor and having shape
+            of (characteristics size, time, number of stocks) instead of
+            (number of stocks, time, characteristics size).
+
+        torch_r: torch.Tensor 
+            Return of the stocks through training period. Changed shape
+            to be (time, number of stocks) instead of original
+            (number of stocks, time).
+
+        torch_benchmark: torch.Tensor
+            Benchmark weights for training period. Using
+            shape (time, number of stocks) instead of original
+            (number of stocks, time).
+
+        number_of_stocks: int
+            Number of stocks to be used in this experiment
+
+        torch_characteristics_val: torch.Tensor
+            Firm characteristics from validation period
+            transformed to tensor . Same shape change 
+            from training period applies.
+
+        torch_r_val: torch.Tensor
+            Return of the stocks through validation period. 
+            Same shape change from training period applies.
+
+        torch_benchmark_val: torch.Tensor
+            Benchmark weights for validation period. Same
+            shape change from training period applies.
+
+        config: dict
+            Dictionary containing best hyperparameter config such as : 
+            learning_rate, l2_regularization, epochs_size, adam_betha1, adam_betha2 and patience.
         
         Returns
         -------
-        self.nn_loss:
-        self.nn_return:
-        self.nn_return_std:
-        self.nn_val_loss:
-        self.nn_val_return:
-        self.nn_val_return_std:
-        optimized_nn:
+
+        self.nn_weight_list: [ numpy.Array, ]
+            Portfolio weight for each epoch
+            using training period.
+
+        self.nn_weight_list_constrained: [ numpy.Array, ]
+            Portfolio weight with constraints
+            for each epoch using training period.
+
+
+        self.nn_loss: [ float, ]
+            Training objective function
+            over epochs in training.
+        self.nn_return: [ numpy.Array, ]
+            Mean return over epochs in
+            training period.
+        self.nn_return_std: [ numpy.Array, ]
+            Standard deviation from return
+            over epochs in training period.
+        self.nn_return_constrained: [ numpy.Array, ]
+            Mean return over epochs using
+            constrained weights in training period.
+
+        self.nn_val_loss: [ float, ]
+            Training objective function
+            over epochs in validation period.
+        self.nn_val_return: [ numpy.Array, ]
+            Mean return over epochs in
+            validation period.
+        self.nn_val_return_std: [ numpy.Array, ]
+            Standard deviation from return
+            over epochs in validation period.
+        self.nn_val_return_constrained [ numpy.Array, ]
+            Mean return over epochs using
+            constrained weights in validation period.
+
+        optimized_nn: utils.ParametricPortifolioNN
+            Neural network object trained with 
+            best found theta ( weights ).
 
         """
         LOGGER.info("Start neural network optimization.")
@@ -576,11 +668,14 @@ class ParametricPortifolio():
         learning_rate = config['learning_rate']
         l2_regularization = config['l2_regularization']
         epochs_size = config['epochs_size']
+        # Due to baysean optimization *epochs_size* is a
+        # float parameter so we need to convert it to int
         epochs_size = int(epochs_size)
-
         adam_betha1 = config['adam_betha1']
         adam_betha2 = config['adam_betha2']
         patience = config['patience']
+        # Due to baysean optimization *patience* is a
+        # float parameter so we need to convert it to int
         patience = int(patience)
 
         torch_r_val = torch_r_val[1:]
@@ -604,15 +699,21 @@ class ParametricPortifolio():
         self.nn_weight_list_constrained = []
         for i in range(epochs_size):
             opt.zero_grad()
+            # Training period
             value, r_ = portifolio(torch_characteristics[:-1])
             loss = loss_fn(value)
             loss_values.append(loss.item())
             # r_p = torch.sum(r_,-1)
+
+            # Create portfolio weights using theta (or weights) from nn named portifolio
             w_train_nn = portifolio.weights(torch_characteristics[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark[:-1]
             w_train_nn_constrained = torch.Tensor(constrain_weights(w_train_nn.detach().numpy().T).T)
+
+            # Save training constrained and normal weights
             self.nn_weight_list.append(w_train_nn.detach().numpy())
             self.nn_weight_list_constrained.append(w_train_nn_constrained.detach().numpy())
-
+            
+            # Get return from normal and constrained portifolio weight verions 
             r_p = torch.sum((w_train_nn*torch_r[1:]), dim=1)
             r_p_constrained = torch.sum((w_train_nn_constrained*torch_r[1:]), dim=1)
 
@@ -621,10 +722,14 @@ class ParametricPortifolio():
             mean_r_p_constrained = torch.mean(r_p_constrained).detach().numpy()
             std_r_p_constrained = torch.std(r_p_constrained).detach().numpy()
 
+
+            # Validate results on validation period using theta ( or weights ) from training NN
             portifolio_val.weights = portifolio.weights
             value_val, r_val = portifolio_val(torch_characteristics_val[:-1])
             loss_val = loss_fn(value_val)
             # r_p_val = torch.sum(r_val,-1)
+
+            # Same process from training period
             w_val_nn = portifolio_val.weights(torch_characteristics_val[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark_val[:-1]
             w_val_nn_constrained = torch.Tensor(constrain_weights(w_val_nn.detach().numpy().T).T)
             r_p_val = torch.sum((w_val_nn*torch_r_val), dim=1)
@@ -636,6 +741,8 @@ class ParametricPortifolio():
             mean_r_p_val_constrained = torch.mean(r_p_val_constrained).detach().numpy()
             std_r_p_val_constrained = torch.std(r_p_val_constrained).detach().numpy()
 
+
+            # Save results found for each epoch
             return_values_mean_val.append(mean_r_p_val)
             return_values_std_val.append(std_r_p_val)
             return_values_mean_val_constrained.append(mean_r_p_val_constrained)
@@ -654,40 +761,57 @@ class ParametricPortifolio():
             loss.backward()
             opt.step()
 
-            # New Early stopping
+            
+            # Early stopping
             if len(loss_values_val)==1:
-                min_loss_val = loss_values_val[-1]
+                last_loss_val = loss_values_val[-1]
+                last_loss_train = loss_values[-1]
             else:
-                if min_loss_val > loss_values_val[-1]:
-                    min_loss_val = loss_values_val[-1]
-                    patience_counter=0
+                if last_loss_train > loss_values[-1]:
+                    training_decreasing = True
                 else:
-                    patience_counter+=1
+                    training_decreasing = False
+                
+                if last_loss_val > loss_values_val[-1]:
+                    validation_decreasing = True
+                else:
+                    validation_decreasing = False
+
+                ## Can change it to happen after first time instead
+                ## of count how many times it occured
+                if training_decreasing and not validation_decreasing:
+                    patience_counter += 1
+
+                last_loss_val = loss_values_val[-1]
+                last_loss_train = loss_values[-1]
 
             if patience_counter == patience:
                 break
+
+            # # Early stopping
+            # if len(loss_values_val)==1:
+            #     min_loss_val = loss_values_val[-1]
+            # else:
+            #     if min_loss_val > loss_values_val[-1]:
+            #         min_loss_val = loss_values_val[-1]
+            #         patience_counter=0
+            #     else:
+            #         patience_counter+=1
+
+            # if patience_counter == patience:
+            #     break
             
-            # If the difference between validation loss and training loss is greater than 80% break
-            relative_diff_loss =  (loss_values[-1] - loss_values_val[-1])/loss_values_val[-1]
-            if i%50==0:
-                LOGGER.debug(f"Relative difference of validation and training loss: {relative_diff_loss}")
-            if abs(relative_diff_loss) > 0.8:
-                break
+            # # If the difference between validation loss and training loss is greater than 80% break
+            # relative_diff_loss =  (loss_values[-1] - loss_values_val[-1])/loss_values_val[-1]
+            # if i%50==0:
+            #     LOGGER.debug(f"Relative difference of validation and training loss: {relative_diff_loss}")
+            # if abs(relative_diff_loss) > 0.8:
+            #     break
 
-            # ## Early stopping
-            # if len(loss_values) > patience:
-                
-            #     comparison_loss = loss_values[-patience:]
-            #     comparison_loss_val = loss_values_val[-patience:]
-
-            #     logic_loss = strict_decreasing(comparison_loss)
-            #     logic_loss_val = strict_increasing(comparison_loss_val)
-
-            #     if logic_loss==True and logic_loss_val==True:
-            #         break
         
         theta = portifolio.weights.state_dict()['weight'].detach().numpy()
 
+        # Save all results found. Use parameters from this experiment object.
         self.nn_loss = loss_values
         self.nn_return = return_values_mean
         self.nn_return_constrained = return_values_mean_constrained
@@ -721,21 +845,40 @@ class ParametricPortifolio():
             Test set of the book to market ratio characteristic.
         test_return: pandas.DataFrame
             Test set of the returns.
-        optimized_nn: 
+        optimized_nn: utils.ParametricPortifolioNN
+            Neural network object trained with 
+            best found theta ( weights ).
+        test: [ int, ]
+            List of test indexes.
 
         Returns
         -------
-        ############### NEED TO ADD TONS OF INFO HERE ###############
-        
 
-        benchmark_test_r: float
+        self.benchmark_test_r: float
             Benchmark return on test set.
-        benchmark_test_r_std: float
+        self.benchmark_test_r_std: float
             Benchmark return standard deviation on test set.
-        test_r: float
+        self.test_r: float
             Optimized return on test set.
-        test_r_std: float
+        self.test_r_std: float
             Optimized return standard deviation on test set.
+        self.test_r_constrained: float
+        self.test_r_constrained_std: float
+        self.test_r_constrained_transaction: float
+        self.test_r_constrained_transaction_std: float
+
+
+        self.weights_computed:
+        self.test_r_nn:
+        self.test_r_nn_std:
+        self.test_r_nn_constrained:
+        self.test_r_nn_constrained_std:
+        self.test_r_nn_constrained_transaction:
+        self.test_r_nn_constrained_transaction_std:
+
+        self.test_cdi_return:
+        self.test_ibov_return:
+
         """
 
         LOGGER.info("Evaluating theta on test set.")
@@ -1011,7 +1154,6 @@ class ParametricPortifolio():
         stats_info['Sharpe Ratio']  = np.round(sharpe_ratio, 4)
         return stats_info
 
-    
     def create_comparison_excel(
         self, optimized_nn, torch_characteristics, number_of_stocks,
         torch_benchmark, torch_r, sol_theta, firm_characteristics, 
@@ -1080,7 +1222,6 @@ class ParametricPortifolio():
         df['Return type'] = ["Optimization return (%)", "Optimization return compared to CDI/Selic (%)", "Optimization return compared to IBOV(%)"]
         df.round(3).set_index('Return type').to_csv(f'{data_type}_opt_cdi_ibov_comparison.csv')
 
-
     # TO-DO: Change it to use any number of characteristics
     def create_experiment(self, indexes_list):
         """
@@ -1127,7 +1268,7 @@ class ParametricPortifolio():
         LOGGER.info("Started experiment.")
         np.random.seed(123)
         for train, val, test in indexes_list:
-            LOGGER.info("Splitting data into train and test set.")
+            LOGGER.info("Splitting data into train, validation and test set.")
             theta0 = np.random.rand(1, 3)
             
             train_btm = self.book_to_mkt_ratio.loc[train]
@@ -1155,10 +1296,12 @@ class ParametricPortifolio():
             firm_characteristics_val, r_val, time_val, number_of_stocks = self.create_characteristics(val_me, val_mom, val_btm, val_return)
 
             ### Creating weights to a benchmark portifolio using uniform weighted returns
-            # w_benchmark = self.value_weighted.iloc[train].T.to_numpy()
-            # w_benchmark_val = self.value_weighted.iloc[val].T.to_numpy()
-            w_benchmark = create_w_benchmark(number_of_stocks, time)
-            w_benchmark_val = create_w_benchmark(number_of_stocks, time_val)
+            if self.benchmark_type == 'value_weighted':
+                w_benchmark = self.value_weighted.iloc[train].T.to_numpy()
+                w_benchmark_val = self.value_weighted.iloc[val].T.to_numpy()
+            else:
+                w_benchmark = create_w_benchmark(number_of_stocks, time)
+                w_benchmark_val = create_w_benchmark(number_of_stocks, time_val)
 
             torch_characteristics, torch_r, torch_benchmark  = convert_to_nn_variables(firm_characteristics, r, w_benchmark)
             torch_characteristics_val, torch_r_val, torch_benchmark_val  = convert_to_nn_variables(
@@ -1205,8 +1348,12 @@ class ParametricPortifolio():
             firm_characteristics_global, r_global, time_global, number_of_stocks = self.create_characteristics(
             me, mom, btm, return_
             )
-            w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
-            # w_benchmark_global = self.value_weighted.T.to_numpy()
+
+            if self.benchmark_type == 'value_weighted':
+                w_benchmark_global = self.value_weighted.T.to_numpy()
+            else:
+                w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
+                
             torch_characteristics_global, torch_r_global, torch_benchmark_global  = convert_to_nn_variables(
                 firm_characteristics_global, r_global, w_benchmark_global
                 )
