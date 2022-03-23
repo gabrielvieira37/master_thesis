@@ -831,6 +831,9 @@ class ParametricPortifolio():
     def evaluate_theta(self, sol_theta, test_me, test_mom, test_btm, test_return, optimized_nn, test):
         """
         Evaluate theta optimized return on test sample.
+        Evaluate theta (weights) from NN on test sample.
+        Create return comparison with CDI and IBOV.
+        Calculate statistics from all returns.
 
         Parameters
         ----------
@@ -850,6 +853,10 @@ class ParametricPortifolio():
             best found theta ( weights ).
         test: [ int, ]
             List of test indexes.
+        self.benchmark_type: str
+            Parameter to indicate which benchmark to use
+            'value_weighted' for VW portifolio or 
+            'equally_weighted' for EQ portifolio.
 
         Returns
         -------
@@ -863,27 +870,48 @@ class ParametricPortifolio():
         self.test_r_std: float
             Optimized return standard deviation on test set.
         self.test_r_constrained: float
-        self.test_r_constrained_std: float
+            Mean return at test set using constrained weights
+        self.test_r_constrained_std: float.
+            Standard deviation from return at test 
+            set using constrained weights.
         self.test_r_constrained_transaction: float
+            Mean return at test set using constrained weights
+            and transaction costs.
         self.test_r_constrained_transaction_std: float
+            Standard deviation from return at test 
+            set using constrained weights and transaction costs.
 
 
-        self.weights_computed:
+        self.weights_computed: dict( list(numpy.Array, ) )
+            Weights computed from NN and OPT best thetas at
+            test period. Also save constrained weight versions.
+
         self.test_r_nn:
+            Mean return on test set using neural networks.
         self.test_r_nn_std:
+            Standard deviation from return on test set 
+            using neural networks.
         self.test_r_nn_constrained:
+            Mean return on test set using neural networks
+            and weights constraints.
         self.test_r_nn_constrained_std:
+            Standard deviation return on test set using neural 
+            networks and weights constraints.
         self.test_r_nn_constrained_transaction:
+            Mean return on test set using neural networks, weights 
+            constraints and transaction costs.
         self.test_r_nn_constrained_transaction_std:
+            Standard deviation return on test set using neural networks, 
+            weights constraints and transaction costs.
 
         self.test_cdi_return:
+            CDI return sequence at test set.
         self.test_ibov_return:
-
+            IBOV return sequence at test set.
         """
 
         LOGGER.info("Evaluating theta on test set.")
         #### TESTING CHARACTERISTICS
-        self.training = False
         firm_characteristics_test, r_test, time_test, number_of_stocks = self.create_characteristics(test_me, test_mom, test_btm, test_return)
 
         #### CREATE BENCHMARK FOR TESTING
@@ -904,14 +932,17 @@ class ParametricPortifolio():
         w_test_nn_constrained = torch.Tensor(constrain_weights(w_test_nn.detach().numpy().T).T)
         w_test_nn_constrained_transaction = w_test_nn_constrained*torch.Tensor(self.test_market_cost[:-1].to_numpy())
         
+        # Save computed weights on test set from neural network
         self.weights_computed['nn_optimized'].append(w_test_nn.detach().numpy().T)
         self.weights_computed['nn_optimized_constrained'].append(w_test_nn_constrained.detach().numpy().T)
 
         ## Create nn return sequence to be used after
         test_r_nn_sequence = torch.sum((w_test_nn*torch_r_test), dim=1)
+        test_r_nn_constrained_sequence = torch.sum((w_test_nn_constrained*torch_r_test), dim=1)
+
+        # Save all mean and std from returns with constrained and unconstrained weights
         self.test_r_nn = torch.mean(test_r_nn_sequence).detach().numpy()
         self.test_r_nn_std = torch.std(test_r_nn_sequence).detach().numpy()
-        test_r_nn_constrained_sequence = torch.sum((w_test_nn_constrained*torch_r_test), dim=1)
         self.test_r_nn_constrained = torch.mean(test_r_nn_constrained_sequence).detach().numpy()
         self.test_r_nn_constrained_std = torch.std(test_r_nn_constrained_sequence).detach().numpy()
         self.test_r_nn_constrained_transaction = torch.mean(torch.sum(w_test_nn_constrained_transaction*torch_r_test, dim=1)).detach().numpy()
@@ -923,7 +954,7 @@ class ParametricPortifolio():
         benchmark_test_r = benchmark_r_test_series['mean']
         benchmark_test_r_std = benchmark_r_test_series['std']
 
-        ### CREATE TEST WEIGHT AND FIND ITS RETURN
+        ### Create test weight from Optimized theta and find its return
         w_test = np.empty(shape=(number_of_stocks, time_test))
         for i in range(number_of_stocks):
             firm_df = firm_characteristics_test[i].copy()
@@ -932,15 +963,17 @@ class ParametricPortifolio():
         
         # w_test = w_test/w_test.sum(axis=0)
         
+        # Save computed weights on test set from optimize algorithm
         self.weights_computed['optimized'].append(w_test)
-        
         w_test_constrained = constrain_weights(w_test.copy())
         self.weights_computed['optimized_constrained'].append(w_test_constrained)
+
+        ## Create nn optimized sequence to be used after
 
         # Get weight from t and return from t+1
         r_test_sequence = pd.Series(np.sum(w_test[:,:-1]*r_test[:,1:], axis=0))
         r_test_series = r_test_sequence.describe()
-
+        
         r_test_constrained_sequence = pd.Series(np.sum(w_test_constrained[:,:-1]*r_test[:,1:], axis=0))
         r_test_constrained_series = r_test_constrained_sequence.describe()
         test_r_constrained_transaction_series = pd.Series(np.sum(w_test_constrained[:,:-1]*r_test[:,1:]*self.test_market_cost[:-1].T, axis=0)).describe()
@@ -948,6 +981,7 @@ class ParametricPortifolio():
         test_r = r_test_series['mean']
         test_r_std = r_test_series['std']
 
+        # Create comparison excel to compare IBOV, CDI, OPT and NN returns
         self.create_comparison_excel(
             optimized_nn, torch_characteristics_test, number_of_stocks,
             torch_benchmark_test, old_torch_r_test, sol_theta, firm_characteristics_test, 
@@ -960,12 +994,14 @@ class ParametricPortifolio():
         test_r_constrained_transaction_std = test_r_constrained_transaction_series['std']
 
         test_cdi_return = self.cdi_return[-(time_test):-1].reset_index()['Taxa SELIC']
-        self.test_cdi_return = test_cdi_return
         test_ibov_return = self.ibov_return[-(time_test):-1].reset_index()['Var%']
+
+        # Save cdi and ibov returns from test period
+        self.test_cdi_return = test_cdi_return
         self.test_ibov_return = test_ibov_return
 
         
-        ## Statistics
+        ## Calculate statistics
 
         ## NN 
         ### Normal
@@ -1005,7 +1041,6 @@ class ParametricPortifolio():
         opt_df = pd.DataFrame(list(opt_stats_info.values()), columns=['Optimized'])
 
         ### Constrained
-
         test_r_opt_sequence_constrained = r_test_constrained_sequence.to_numpy()
         w_test_opt_constrained = w_test_constrained[:,:-1]
         r_test_opt_constrained = r_test[:,1:]
@@ -1025,9 +1060,6 @@ class ParametricPortifolio():
 
         stats_df.to_excel('return_statistics.xlsx')
 
-
-        # r_test_constrained_sequence
-        # w_test_constrained = w_test_constrained[:,:-1]
     
         # Saving return variables into properties
         self.benchmark_test_r = benchmark_test_r
@@ -1041,7 +1073,6 @@ class ParametricPortifolio():
 
         self.test_r_constrained_transaction = test_r_constrained_transaction
         self.test_r_constrained_transaction_std = test_r_constrained_transaction_std
-
         LOGGER.info("Evalueted theta on test set.")
 
     def calculate_statistics(self, w_test, test_r_sequence, matrix_type, test_cdi_return, r_test):
@@ -1083,14 +1114,23 @@ class ParametricPortifolio():
             r_test = r_test.T
             w_test = w_test.T
         
+        # Calculate STD from returns
         test_std = np.std(test_r_sequence)
+        # Calculate new sequence removing its mean
         test_r_sequence_star = test_r_sequence - test_r_sequence.mean()
+        # Calculate partial lower STD ( std from negative numbers )
         partial_std = test_r_sequence_star[test_r_sequence_star<0].std()
+        # Calculate kurtosis from returns
         test_kurt = kurtosis(test_r_sequence, fisher=True)
+        # Calculate skewness from returns
         test_skew = skew(test_r_sequence)
+        # Calculate excess return using CDI as risk free return
         excess_return = np.mean(test_r_sequence-test_cdi_return)
         
-
+        # Try to find if there is a time in return sequence
+        # that your fund is broken. E.G. there is more than
+        # 100% negative return. Skip that time and calculate
+        # cumulative return starting from next time.
         return_sequence = ((test_r_sequence/100)+1)
         if (return_sequence<0).any():
             positions = []
@@ -1101,12 +1141,18 @@ class ParametricPortifolio():
         else:
             start_idx = -1
         
+        # Calculate cumulative return from return sequence
         cumulative_return = np.cumprod(return_sequence[start_idx+1:])[-1]*100
+        # Calculate sharpe ratio from return using excess return
         sharpe_ratio = excess_return/test_std
         
+        # Mean of Max weight found at each time
         mean_max = np.mean(np.max(w_test, axis=shape_stocks))
+        # Mean of min weight found at each time
         mean_min = np.mean(np.min(w_test, axis=shape_stocks))
+        # How much leverage there is at each time
         mean_gross_leverage = np.mean(np.sum(np.abs(w_test), axis=shape_stocks))
+        # Mean proportion of negative weights at each time
         proportion_leverage = np.mean(w_test<0)*100
 
 
@@ -1122,6 +1168,7 @@ class ParametricPortifolio():
         for idx_h_w in range(1, r_test.shape[shape_time]):
             w_test_hold[idx_h_w] = return_test_hold[idx_h_w-1] * w_test[idx_h_w-1]
 
+        # Calculate average turnover ( how better would be to hold instead of changing weights )
         avg_turnover= np.abs(w_test[1:]-w_test_hold[1:]).mean(axis=shape_stocks).mean()*100
 
         total_diversification = []
@@ -1137,6 +1184,7 @@ class ParametricPortifolio():
                             )
             total_diversification.append(diversitfication)
         
+        # Calculate total diversitication ( how distributed are your return distribution )
         average_diverstification = np.mean(total_diversification)
 
         stats_info['Standard Deviation (%)']  = np.round(test_std, 4)
