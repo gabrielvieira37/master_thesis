@@ -20,6 +20,25 @@ handler.setFormatter(formatter)
 LOGGER.addHandler(handler)
 
 def constrain_weights(w):
+    """
+    Constrain weights to have only the permitted leverage
+
+    Parameters
+    ----------
+
+    w: numpy.Array
+        Array of weights computed by its models.
+        May or not have leverage larger than permited_leverage.
+
+    Returns
+    -------
+
+    new_w: numpy.Array
+        New weights with only permited leverage
+        at each time step
+    """
+
+    # Hardcoded
     permited_leverage = -0.3
     must_have_positive_weights = 1.3
 
@@ -35,8 +54,6 @@ def constrain_weights(w):
     capped_positive_weights = ((w/total_positive)*must_have_positive_weights)
     capped_positive_weights[capped_positive_weights==np.inf] = 0
     capped_positive_weights[capped_positive_weights==-np.inf] = 0
-
-    # import pdb; pdb.set_trace()
 
     negative_mask = w<0
     positive_mask = w>0
@@ -178,6 +195,17 @@ def compute_transaction_costs(data_path):
     """
     Compute transaction costs using volume values
     and putting in a comission tax.
+
+    Parameters
+    ----------
+    data_path: str
+        Path where all data is to be found.
+
+    Returns
+    -------
+    market_cost: numpy.Array
+        Array with market cost using
+        stock volume as base.
     """
 
     volumes = pd.read_csv(os.path.join(data_path , 'monthly_volume.csv'))
@@ -302,10 +330,92 @@ def weight_reset(m):
     if isinstance(m, nn.Linear):
         m.reset_parameters()
 
-def strict_decreasing(loss_values):
-    return all(x>y for x,y in zip(loss_values, loss_values[1:]))
+## Need to change to more characteristics
+def calculate_best_validation_technique(firm_characteristics):
+    """
+    Calculate best validation technique based on each 
+    time series from firm characteristics.
 
+    Parameters
+    ----------
+    firm_characteristics: pandas.DataFrame
+        Dataframe containing all characteristics for 
+        all stocks at each time step.
 
-def strict_increasing(loss_values):
-    return all(x<y for x,y in zip(loss_values, loss_values[1:]))
+    """
+    btm_list = []
+    me_list = []
+    mom_list = []
+
+    btm_q_list = []
+    me_q_list = []
+    mom_q_list = []
+    number_of_characteristics = 3
     
+    LOGGER.info("Started to calculate the best validation technique.")
+
+    number_of_stocks = firm_characteristics.shape[1] // number_of_characteristics
+    for i in range(number_of_stocks):
+        sm_char = firm_characteristics.rolling(12, min_periods=1).mean()
+        em_char = firm_characteristics.ewm(alpha=0.1, adjust=False).mean()
+        
+        btm_ = sm_char[i]['btm'].mean() / em_char[i]['btm'].mean()
+        me_ = sm_char[i]['me'].mean() / em_char[i]['me'].mean()
+        mom_ = sm_char[i]['mom'].mean() / em_char[i]['mom'].mean()
+        
+        
+        q5 = firm_characteristics.quantile(0.05)
+
+        btm_q = q5[i]['btm']
+        me_q = q5[i]['me']
+        mom_q = q5[i]['mom']
+        
+        btm_list.append(btm_)
+        me_list.append(me_)
+        mom_list.append(mom_)
+        
+        btm_q_list.append(btm_q)
+        me_q_list.append(me_q)
+        mom_q_list.append(mom_q)
+    
+    total_passed_tests = 0
+
+    # Stocks with accel < 1.2
+    total_passed_tests += (np.array(btm_list) < 1.2).sum()
+    total_passed_tests += (np.array(me_list) < 1.2).sum()
+    total_passed_tests += (np.array(mom_list) < 1.2).sum()
+    
+    threshold = (number_of_stocks*number_of_characteristics)//2
+    
+    # If half of the possible tests not passed
+    if total_passed_tests < threshold:
+        LOGGER.info(
+            f"Only {total_passed_tests} tests passed " + 
+            f"out of {number_of_stocks*number_of_characteristics}."
+            )
+        LOGGER.info("You shoud use REP-Holdout validation instead of Holdout.")
+        LOGGER.info("You may stop this experiment and choose it.")
+        LOGGER.info("Finished calculation of best validation technique.")
+        return
+    
+    total_passed_tests = 0
+
+    # Stocks with Perc05 < 1.6
+    total_passed_tests += (np.array(btm_q_list) < 1.6).sum()
+    total_passed_tests += (np.array(me_q_list) < 1.6).sum()
+    total_passed_tests += (np.array(mom_q_list) < 1.6).sum()
+    
+    # If half of the possible tests not passed
+    if total_passed_tests < threshold:
+        LOGGER.info(
+            f"Only {total_passed_tests} tests passed " + 
+            f"out of {number_of_stocks*number_of_characteristics}."
+            )
+        LOGGER.info("Holdout is not the best validation technique you may choose another.")
+        LOGGER.info("You may stop this experiment and choose another.")
+        LOGGER.info("Finished calculation of best validation technique.")
+        return
+        
+    LOGGER.info("Holdout is the best validation technique.")
+    LOGGER.info("We can continue our experiment without a problem.")
+    LOGGER.info("Finished calculation of best validation technique.")

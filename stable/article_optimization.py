@@ -3,6 +3,7 @@ import warnings
 import os
 import logging
 import json
+import pathlib
 import torch
 import numpy as np
 import pandas as pd
@@ -27,7 +28,7 @@ from utils import (
     data_split, create_w_benchmark, plot_splitted_data,
     utility_function, constrain_weights, compute_transaction_costs,
     ParametricPortifolioNN, loss_fn, convert_to_nn_variables, weight_reset,
-    strict_decreasing, strict_increasing
+    calculate_best_validation_technique
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -51,33 +52,45 @@ class ParametricPortifolio():
     to adjust portifolio weights.
     """
 
-    def __init__(self, data_path, risk_constant, train_split, val_split, learning_rate, l2_regularization, epochs_size, patience, plot_weights):
+    def __init__(self, data_path, risk_constant, train_split, val_split, benchmark_type, plot_weights, plot_heatmap):
         """
-        Initialize object with data path, risk constant, transaction cost and
-        the percentage of train split.
+        Initialize object with data path, risk constant, 
+        the percentage of train split and validation split, 
+        benchmark type and if we plot or not weights and heatmap.
 
         Parameters
         ----------
+
+        data_path: str
+            Path where all data is to be found.
+        risk_constant: int
+            Risk constant, increase it to become more risk averse.
+        train_split: float
+            Train percentage to split.
+        val_split: float
+            Validation percentage to split, start counting after 
+            training indexes.
+        benchmark_type: str
+            Benchmark type use 'value_weighted' to use VW portfolio
+            for benchmark or 'equally_weighted' for EQ portfolio.
+        plot_weights: bool
+            Check if user wants to plot weights from test period.
+        plot_heatmap: bool
+            Check if user wants to plot an animated weight 
+            evolution throughout epochs.
 
         """
         self.data_path = data_path
         self.risk_constant = risk_constant
         self.train_split = train_split
         self.val_split = val_split
-        self.patience = patience
         self.plot_weights = plot_weights
 
-        self.learning_rate = learning_rate
-        self.l2_regularization = l2_regularization
-        self.epochs_size = epochs_size
+        self.benchmark_type = benchmark_type
 
-        self.benchmark_type = 'value_weighted'
+        self.plot_heatmap = plot_heatmap
 
-        self.training = True
-        self.mean_mean = {}
-        self.mean_std = {}
-
-        # 01/01/1995
+        # 01/01/1995 - HARDCODED
         base = datetime.datetime.fromtimestamp(788925600)
         # 203 months
         self.timestamp = pd.date_range(base, base + relativedelta(months=+202), freq='MS').strftime("%Y-%b").tolist()
@@ -127,12 +140,6 @@ class ParametricPortifolio():
 
         self.results_comparison = {}
 
-        # comparison_fields = ["cdi", "ibov"]
-        # calculated_fields = ["nn", "nn_constraint", "opt", "opt_constraint"]
-
-        # for comp_field in comparison_fields:
-        #     for cal_field in calculated_fields:
-        #         self.results_comparison[f"{cal_field}_{comp_field}_comparison"] = {}
 
     # TO-DO: Change it to load any number of characteristics
     def load_data(self):
@@ -787,27 +794,6 @@ class ParametricPortifolio():
 
             if patience_counter == patience:
                 break
-
-            # # Early stopping
-            # if len(loss_values_val)==1:
-            #     min_loss_val = loss_values_val[-1]
-            # else:
-            #     if min_loss_val > loss_values_val[-1]:
-            #         min_loss_val = loss_values_val[-1]
-            #         patience_counter=0
-            #     else:
-            #         patience_counter+=1
-
-            # if patience_counter == patience:
-            #     break
-            
-            # # If the difference between validation loss and training loss is greater than 80% break
-            # relative_diff_loss =  (loss_values[-1] - loss_values_val[-1])/loss_values_val[-1]
-            # if i%50==0:
-            #     LOGGER.debug(f"Relative difference of validation and training loss: {relative_diff_loss}")
-            # if abs(relative_diff_loss) > 0.8:
-            #     break
-
         
         theta = portifolio.weights.state_dict()['weight'].detach().numpy()
 
@@ -1058,7 +1044,7 @@ class ParametricPortifolio():
 
         stats_df = pd.concat([nn_df, nn_constrained_df, opt_df, opt_constrained_df], axis=1).set_index('Statistic Name')
 
-        stats_df.to_excel('return_statistics.xlsx')
+        stats_df.to_excel('./sheets/return_statistics.xlsx')
 
     
         # Saving return variables into properties
@@ -1289,7 +1275,7 @@ class ParametricPortifolio():
                 ignore_index=True 
                 )
         df['Return type'] = ["Neural Network return (%)", "NN return compared to CDI/Selic (%)", "NN return compared to IBOV(%)"]
-        df.round(3).set_index('Return type').to_csv(f'{data_type}_nn_cdi_ibov_comparison.csv')
+        df.round(3).set_index('Return type').to_csv(f'./sheets/{data_type}_nn_cdi_ibov_comparison.csv')
 
 
         df = pd.DataFrame(r_constrained_sequence.to_numpy().reshape(1,data_dimension), columns=self.timestamp[lower_idx:upper_idx])
@@ -1306,7 +1292,7 @@ class ParametricPortifolio():
                 ignore_index=True 
                 )
         df['Return type'] = ["Optimization return (%)", "Optimization return compared to CDI/Selic (%)", "Optimization return compared to IBOV(%)"]
-        df.round(3).set_index('Return type').to_csv(f'{data_type}_opt_cdi_ibov_comparison.csv')
+        df.round(3).set_index('Return type').to_csv(f'./sheets/{data_type}_opt_cdi_ibov_comparison.csv')
 
     # TO-DO: Change it to use any number of characteristics
     def create_experiment(self, indexes_list):
@@ -1329,87 +1315,138 @@ class ParametricPortifolio():
             List of stock names as strings.
         self.risk_constant: int
             Risk constant, increase it to become more risk averse.
-        
-        self.market_cost
-        self.value_weighted
-
-
+        self.market_cost: numpy.Array
+            Array with market cost using stock volume as base.
+        self.value_weighted: numpy.Array
+            Value weighted benchamrk using market cap.
         indexes_list: [( [int, ], [int, ] )]
             List of tuples containing training indexes and testing indexes.
 
         Returns
-        -------
+        -------        
+        self.train_market_cost: numpy.Array
+            Spllited market cost into train period
+        self.val_market_cost: numpy.Array
+            Spllited market cost into validation period
+        self.test_market_cost: numpy.Array
+            Spllited market cost into test period
 
-        benchmark_mean_return: float
-            Mean benchmark return for each time frame, in this case for each month.
-        mean_obj_r: [float, ]
-            List of objective values through each optimization step.
-        mean_r: [float, ]
-            List of return using optimized weights through each optimization step.
-        benchmark_test_r: float
-            Benchmark return on test set.
-        benchmark_test_r_std: float
-            Benchmark return standard deviation on test set.
-        test_r: float
-            Optimized return on test set.
-        test_r_std: float
-            Optimized return standard deviation on test set.
+        self.torch_characteristics: torch.Tensor
+            Firm characteristics transformed to tensor and having shape
+            of (characteristics size, time, number of stocks) instead of
+            (number of stocks, time, characteristics size).
+        self.torch_r: torch.Tensor
+            Return of the stocks through training period. Changed shape
+            to be (time, number of stocks) instead of original
+            (number of stocks, time).
+        self.torch_benchmark: torch.Tensor
+            Benchmark weights for training period. Using
+            shape (time, number of stocks) instead of original
+            (number of stocks, time).
 
-        
-        self.train_market_cost
-        self.val_market_cost
-        self.test_market_cost
+        self.number_of_stocks: int
+            Number of stocks to be used in this experiment
 
-        self.torch_characteristics
-        self.torch_r
-        self.torch_benchmark
-        self.number_of_stocks
-        self.torch_characteristics_val
-        self.torch_r_val
-        self.torch_benchmark_val
+        self.torch_characteristics_val: torch.Tensor
+            Firm characteristics from validation period
+            transformed to tensor . Same shape change 
+            from training period applies.
 
+        self.torch_r_val: torch.Tensor
+            Return of the stocks through validation period. 
+            Same shape change from training period applies.
+        self.torch_benchmark_val: torch.Tensor
+            Benchmark weights for validation period. Same
+            shape change from training period applies.
 
+        # taining parameters
+        self.mean_obj_r_runs: [[float, ], ]
+            List of a list of objective values from 
+            optimized model at training period. Each 
+            run produces a list of objective values 
+            for each optimization step.
 
-        self.mean_obj_r_runs
-        self.mean_obj_r_val_runs
+        self.mean_obj_r_val_runs: [[float, ], ]
+            List of a list of objective values from 
+            optimized model at validation period. Each 
+            run produces a list of objective values 
+            for each optimization step.
 
-        self.mean_r_runs
-        self.mean_constrained_r_runs
-        self.mean_constrained_transaction_r_runs
+        self.mean_r_runs: [[float, ], ]
+            List of a list of mean return from 
+            optimized model at training period. Each 
+            run produces a list of mean return 
+            for each optimization step.
 
-        self.benchmark_mean_return_runs
+        self.mean_constrained_r_runs: [[float, ], ]
+            List of a list of mean return from 
+            optimized model at training period using
+            constrained weights. Each run produces a 
+            list of mean return for each optimization 
+            step.
 
-        self.nn_loss_runs
-        self.nn_return_runs
-        self.nn_return_runs_std
+        self.mean_constrained_transaction_r_runs: [[float, ], ]
+            List of a list of mean return from 
+            optimized model at training period using
+            constrained weights and transaction costs. 
+            Each run produces a list of mean return for 
+            each optimization step.
 
-        self.nn_val_loss_runs
-        self.nn_val_return_runs
-        self.nn_val_return_runs_std
+        self.benchmark_mean_return_runs: [float, ]
+            List of benchmark mean return for each run.
+            It is constant throughout all training process.
 
-        self.benchmark_test_r_runs
-        self.benchmark_test_r_runs_std
+        self.nn_loss_runs: [[float, ], ]
+        self.nn_return_runs: [[float, ], ]
+        self.nn_return_runs_std: [[float, ], ]
 
-        self.test_r_runs
-        self.test_r_runs_std
-        self.test_r_constrained_runs
-        self.test_r_constrained_runs_std
-        self.test_r_constrained_transaction_runs
-        self.test_r_constrained_transaction_runs_std
+        self.nn_val_loss_runs: [[float, ], ]
+        self.nn_val_return_runs: [[float, ], ]
+        self.nn_val_return_runs_std: [[float, ], ]
 
+        # test parameters
+        self.benchmark_test_r_runs: [float, ]
+        self.benchmark_test_r_runs_std: [float, ]
 
-        self.test_r_nn_runs
-        self.test_r_nn_runs_std
-        self.test_r_nn_constrained_runs
-        self.test_r_nn_constrained_runs_std
-        self.test_r_nn_constrained_transaction_runs
-        self.test_r_nn_constrained_transaction_runs_std
+        self.test_r_runs: [float, ]
+        self.test_r_runs_std: [float, ]
+        self.test_r_constrained_runs: [float, ]
+        self.test_r_constrained_runs_std: [float, ]
+        self.test_r_constrained_transaction_runs: [float, ]
+        self.test_r_constrained_transaction_runs_std: [float, ]
 
+        self.test_r_nn_runs: [float, ]
+        self.test_r_nn_runs_std: [float, ]
+        self.test_r_nn_constrained_runs: [float, ]
+        self.test_r_nn_constrained_runs_std: [float, ]
+        self.test_r_nn_constrained_transaction_runs: [float, ]
+        self.test_r_nn_constrained_transaction_runs_std: [float, ]
 
         """
         LOGGER.info("Started experiment.")
         np.random.seed(123)
         for train, val, test in indexes_list:
+            # Getting global values 
+            btm = self.book_to_mkt_ratio
+            me = self.mcap
+            mom = self.lreturn
+            return_ = self.monthly_return
+
+            firm_characteristics_global, r_global, time_global, number_of_stocks = self.create_characteristics(
+            me, mom, btm, return_
+            )
+
+            if self.benchmark_type == 'value_weighted':
+                w_benchmark_global = self.value_weighted.T.to_numpy()
+            else:
+                w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
+                
+            torch_characteristics_global, torch_r_global, torch_benchmark_global  = convert_to_nn_variables(
+                firm_characteristics_global, r_global, w_benchmark_global
+                )
+            
+            calculate_best_validation_technique(firm_characteristics_global)
+
             LOGGER.info("Splitting data into train, validation and test set.")
             theta0 = np.random.rand(1, 3)
             
@@ -1470,24 +1507,6 @@ class ParametricPortifolio():
 
             sol_theta = self.sol.x
 
-            btm = self.book_to_mkt_ratio
-            me = self.mcap
-            mom = self.lreturn
-            return_ = self.monthly_return
-
-            firm_characteristics_global, r_global, time_global, number_of_stocks = self.create_characteristics(
-            me, mom, btm, return_
-            )
-
-            if self.benchmark_type == 'value_weighted':
-                w_benchmark_global = self.value_weighted.T.to_numpy()
-            else:
-                w_benchmark_global = create_w_benchmark(number_of_stocks, time_global)
-                
-            torch_characteristics_global, torch_r_global, torch_benchmark_global  = convert_to_nn_variables(
-                firm_characteristics_global, r_global, w_benchmark_global
-                )
-
             # Compare return from each time to same time in IBOV and CDI
             global_ = np.arange(time_global)
             self.create_comparison_excel(
@@ -1543,13 +1562,17 @@ class ParametricPortifolio():
     
     def plot_animated_heatmap(self, weight_list, weight_type, experiment_label):
         """
-        Plot animated heatmap from weights over epochs
+        Plot animated heatmap from weights over epochs.
 
         Parameters
         ----------
+
         weight_list: [numpy.Array, ]
+            List of generated weights from each epoch.
         weight_type: str
+            String to tell if weights are from nn or nn_constrained.
         experiment_label: str
+            Experiment label to be used on saved gif.
 
         """
         plt.rcParams["figure.figsize"] = [12, 9]
@@ -1575,7 +1598,7 @@ class ParametricPortifolio():
         
         anim = animation.FuncAnimation(fig, animate, init_func=init, frames=epochs, repeat=False)
         writer = animation.PillowWriter(fps=30)
-        anim.save(f'./{experiment_label}_{weight_type}_heatmap_weights.gif', writer=writer)
+        anim.save(f'./images/{weight_type}_heatmap_weights_{experiment_label}.gif', writer=writer)
 
     def plot_final_results(self, experiment_label):
         """
@@ -1637,6 +1660,7 @@ class ParametricPortifolio():
         self.sharp_ratio_constrained_nn
 
         """
+        pathlib.Path('images').mkdir(exist_ok=True)
         # Train results
         mean_obj_r_runs=self.mean_obj_r_runs
         benchmark_mean_return_runs=self.benchmark_mean_return_runs
@@ -1687,8 +1711,9 @@ class ParametricPortifolio():
         }
 
         ### TRAIN PLOTS ###
-        # self.plot_animated_heatmap(self.nn_weight_list, 'nn', experiment_label)
-        # self.plot_animated_heatmap(self.nn_weight_list_constrained, 'nn_constrained', experiment_label)
+        if self.plot_heatmap == True:
+            self.plot_animated_heatmap(self.nn_weight_list, 'nn', experiment_label)
+            self.plot_animated_heatmap(self.nn_weight_list_constrained, 'nn_constrained', experiment_label)
 
         plt.figure(figsize=(12,9))
         plt.title("Mean utility function for each optimization step")
@@ -1700,7 +1725,7 @@ class ParametricPortifolio():
         plt.ylabel('Objective return')
         plt.legend()
         plt.grid()
-        plt.savefig(f'./{experiment_label}_utility_function_over_steps.jpg')
+        plt.savefig(f'./images/opt_utility_function_over_steps_{experiment_label}.jpg')
         
         plt.close()
 
@@ -1722,7 +1747,7 @@ class ParametricPortifolio():
         plt.legend(loc="lower left")
         # plt.legend()
         plt.grid()
-        plt.savefig(f'./{experiment_label}_mean_return_over_steps.jpg')
+        plt.savefig(f'./images/opt_mean_return_over_steps_{experiment_label}.jpg')
         
         plt.close()
         
@@ -1744,7 +1769,7 @@ class ParametricPortifolio():
         plt.xlabel("Epochs")
         plt.legend()
         plt.grid()
-        plt.savefig(f'./{experiment_label}_mean_return_over_epochs.jpg')
+        plt.savefig(f'./images/nn_mean_return_over_epochs_{experiment_label}.jpg')
 
         plt.close()
 
@@ -1758,7 +1783,7 @@ class ParametricPortifolio():
         plt.xlabel("Epochs")
         plt.legend()
         plt.grid()
-        plt.savefig(f'./{experiment_label}_loss_over_epochs.jpg')
+        plt.savefig(f'./images/nn_loss_over_epochs_{experiment_label}.jpg')
 
         ################################################
         plt.close()
@@ -1784,35 +1809,48 @@ class ParametricPortifolio():
         plt.xticks([])
         plt.grid()
         plt.legend()
-        plt.savefig(f'./{experiment_label}_mean_return_test_set_with_std.jpg')
+        plt.savefig(f'./images/mean_return_test_set_with_std_{experiment_label}.jpg')
         
         plt.close()
 
         plt.figure(figsize=(12,9))
         plt.title("Mean return on test set")
         plt.ylabel('Mean return')
-        plt.bar(br1, test_r_mean, label='Optimized test return',color='blue', width = 0.09, alpha=0.5)
-        plt.bar(br2, test_r_constrained_mean, label='Optimized test return with weight constraints', color='green', width = 0.09, alpha=0.5)
-        plt.bar(br3, test_r_constrained_transaction_mean, label='Optimized test return with weight constraints and transaction costs.', color='black', width = 0.09, alpha=0.5)
-        plt.bar(br4, benchmark_test_r_mean, label='Benchmark test return', color='red', width = 0.09, alpha=0.5)
-        plt.bar(br5, test_r_nn, label='Optimized test return using NN', color='brown', width = 0.09, alpha=0.5)
-        plt.bar(br6, test_r_nn_constrained, label='Optimized test return using NN with weight constraints', color='coral', width = 0.09, alpha=0.5)
-        plt.bar(br7, test_r_nn_constrained_transaction, label='Optimized test return using NN with weight constraints and transaction costs.', color='violet', width = 0.09, alpha=0.5)
-        plt.bar(br8, self.test_cdi_return.mean(), label='CDI/Selic mean return', color='cyan', width = 0.09, alpha=0.5)
-        plt.bar(br9, self.test_ibov_return.mean(), label='IBOV mean return', color='lime', width = 0.09, alpha=0.5)
 
-        plt.text(-0.04, test_r_mean*1.01, f'Return :{test_r_mean:.3f}%')
-        plt.text(width-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%')
-        plt.text(2*width-0.04, test_r_constrained_transaction_mean*1.01, f' Return :{test_r_constrained_transaction_mean:.3f}%')
-        plt.text(3*width-0.04 , benchmark_test_r_mean*1.01, f'Return :{benchmark_test_r_mean:.3f}%')
-        plt.text(4*width-0.04 , test_r_nn*1.01, f'Return :{test_r_nn:.3f}%')
-        plt.text(5*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%')
-        plt.text(6*width-0.04 , test_r_nn_constrained_transaction*1.01, f'Return :{test_r_nn_constrained_transaction:.3f}%')
-        plt.text(7*width-0.04 , self.test_cdi_return.mean()*1.01, f'Return :{self.test_cdi_return.mean():.3f}%')
-        plt.text(8*width-0.04 , self.test_ibov_return.mean()*1.01, f'Return :{self.test_ibov_return.mean():.3f}%')
+        plt.bar(br1, test_r_constrained_mean, label='Optimized test return with weight constraints', color='green', width = 0.09, alpha=0.5)
+        plt.bar(br2, test_r_constrained_transaction_mean, label='Optimized test return with weight constraints and transaction costs.', color='black', width = 0.09, alpha=0.5)
+        plt.bar(br3, benchmark_test_r_mean, label='Benchmark test return', color='red', width = 0.09, alpha=0.5)
+        plt.bar(br4, test_r_nn_constrained, label='Optimized test return using NN with weight constraints', color='coral', width = 0.09, alpha=0.5)
+        plt.bar(br5, test_r_nn_constrained_transaction, label='Optimized test return using NN with weight constraints and transaction costs.', color='violet', width = 0.09, alpha=0.5)
+        plt.bar(br6, self.test_cdi_return.mean(), label='CDI/Selic mean return', color='cyan', width = 0.09, alpha=0.5)
+        plt.bar(br7, self.test_ibov_return.mean(), label='IBOV mean return', color='lime', width = 0.09, alpha=0.5)
+
+        plt.text(-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%')
+        plt.text(width-0.04, test_r_constrained_transaction_mean*1.01, f' Return :{test_r_constrained_transaction_mean:.3f}%')
+        plt.text(2*width-0.04 , benchmark_test_r_mean*1.01, f'Return :{benchmark_test_r_mean:.3f}%')
+        plt.text(3*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%')
+        plt.text(4*width-0.04 , test_r_nn_constrained_transaction*1.01, f'Return :{test_r_nn_constrained_transaction:.3f}%')
+        plt.text(5*width-0.04 , self.test_cdi_return.mean()*1.01, f'Return :{self.test_cdi_return.mean():.3f}%')
+        plt.text(6*width-0.04 , self.test_ibov_return.mean()*1.01, f'Return :{self.test_ibov_return.mean():.3f}%')
         plt.xticks([])
         plt.legend(loc="center left")
-        plt.savefig(f'./{experiment_label}_mean_return_test_set.jpg')
+        plt.savefig(f'./images/mean_return_comparison_test_set_{experiment_label}.jpg')
+
+
+        plt.figure(figsize=(12,9))
+        plt.title("Constraint mean return comparison")
+        plt.ylabel('Mean return')
+        plt.bar(br1, test_r_mean, label='Optimized test return',color='blue', width = 0.09, alpha=0.5)
+        plt.bar(br2, test_r_constrained_mean, label='Optimized test return with weight constraints', color='green', width = 0.09, alpha=0.5)
+        plt.bar(br3, test_r_nn, label='Optimized test return using NN', color='black', width = 0.09, alpha=0.5)
+        plt.bar(br4, test_r_nn_constrained, label='Optimized test return using NN with weight constraints', color='red', width = 0.09, alpha=0.5)
+        plt.text(-0.04, test_r_mean*1.01, f'Return :{test_r_mean:.3f}%')
+        plt.text(width-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%')
+        plt.text(2*width-0.04 , test_r_nn*1.01, f'Return :{test_r_nn:.3f}%')
+        plt.text(3*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%')
+        plt.xticks([])
+        plt.legend(loc="center left")
+        plt.savefig(f'./images/constraint_mean_return_comparison_test_set_{experiment_label}.jpg')
 
 
         if self.plot_weights:
@@ -1826,7 +1864,7 @@ class ParametricPortifolio():
                     plt.ylabel("Time")
                     plt.xlabel("Stocks")
                     plt.colorbar().set_label("Weights")
-                    plt.savefig(f'./{experiment_label}_stock_{weight_type}_weights_run_{index+1}.jpg')
+                    plt.savefig(f'./images/stock_{weight_type}_weights_run_{index+1}_{experiment_label}.jpg')
         plt.close()
 
         plt.figure(figsize=(12,9))
@@ -1834,18 +1872,18 @@ class ParametricPortifolio():
         sharp_ratio_constrained = np.mean(sharp_ratio_constrained)
         sharp_ratio_nn=np.mean(sharp_ratio_nn)
         sharp_ratio_constrained_nn=np.mean(sharp_ratio_constrained_nn)
-        
-        plt.bar(0, sharp_ratio, label='Optimized mean sharp ratio')
-        plt.bar(1, sharp_ratio_constrained, label='Optimized constrained mean sharp ratio')
-        plt.bar(2, sharp_ratio_nn, label='Optimized mean sharp ratio with NN')
-        plt.bar(3, sharp_ratio_constrained_nn, label='Optimized constrained mean sharp ratio with NN')
+        plt.title("Mean sharpe ratios")
+        plt.bar(0, sharp_ratio, label='Optimized mean sharpe ratio')
+        plt.bar(1, sharp_ratio_constrained, label='Optimized constrained mean sharpe ratio')
+        plt.bar(2, sharp_ratio_nn, label='Optimized mean sharpe ratio with NN')
+        plt.bar(3, sharp_ratio_constrained_nn, label='Optimized constrained mean sharpe ratio with NN')
 
-        plt.text(-0.3, sharp_ratio*1.01, f'Sharp Ratio: {sharp_ratio:.3f}')
-        plt.text(1-0.3, sharp_ratio_constrained*1.01, f'Sharp Ratio: {sharp_ratio_constrained:.3f}')
-        plt.text(2-0.3, sharp_ratio_nn*1.01, f'Sharp Ratio: {sharp_ratio_nn:.3f}')
-        plt.text(3-0.3, sharp_ratio_constrained_nn*1.01, f'Sharp Ratio: {sharp_ratio_constrained_nn:.3f}')
+        plt.text(-0.3, sharp_ratio*1.01, f'Sharpe Ratio: {sharp_ratio:.3f}')
+        plt.text(1-0.3, sharp_ratio_constrained*1.01, f'Sharpe Ratio: {sharp_ratio_constrained:.3f}')
+        plt.text(2-0.3, sharp_ratio_nn*1.01, f'Sharpe Ratio: {sharp_ratio_nn:.3f}')
+        plt.text(3-0.3, sharp_ratio_constrained_nn*1.01, f'Sharpe Ratio: {sharp_ratio_constrained_nn:.3f}')
         plt.legend(loc="lower right")
-        plt.savefig(f'./{experiment_label}_mean_sharp_ratios.jpg')
+        plt.savefig(f'./images/mean_sharpe_ratios_{experiment_label}.jpg')
 
         plt.close()
 
@@ -1860,7 +1898,7 @@ class ParametricPortifolio():
             plt.ylabel("Percentage")
             plt.xlabel("Test time step")
             plt.bar(range(time_range) ,abs(w*(w<0)).sum(axis=0)*100)
-            plt.savefig(f'./{experiment_label}_leverage_{weight_type}.jpg')
+            plt.savefig(f'./images/leverage_{weight_type}_{experiment_label}.jpg')
 
             
             min_leverage_values = abs((w*(w<0)).min(axis=0))*100
@@ -1871,7 +1909,7 @@ class ParametricPortifolio():
             plt.bar(range(time_range) , min_leverage_values)
             for i in range(time_range):
                 plt.text(i-0.4, min_leverage_values[i]*1.01, stocks_names[i], fontsize=8)
-            plt.savefig(f'./{experiment_label}_highest_leverage_{weight_type}.jpg')
+            plt.savefig(f'./images/highest_leverage_{weight_type}_{experiment_label}.jpg')
         plt.close()
         
 
@@ -1889,12 +1927,15 @@ class ParametricPortifolio():
                 plt.xlabel("Month on test set")
                 plt.bar(x, y)
                 plt.grid()
-                plt.savefig(f'./{experiment_label}_comparison_{cal_field}_{comp_field}.jpg')
+                plt.savefig(f'./images/comparison_{cal_field}_{comp_field}_{experiment_label}.jpg')
         
         LOGGER.info("Saved plots in folder.")
 
 
     def _start(self):
+        """
+        Start portfolio optimization.
+        """
         self.load_data()
 
         self.stocks_names = list(self.monthly_return.columns)
@@ -1905,6 +1946,7 @@ class ParametricPortifolio():
             idxs_list, = data_split(total_size, train_percentage, val_percentage)
             indexes_list.append(idxs_list)
         
+        pathlib.Path("sheets").mkdir(exist_ok=True)
         self.create_experiment(indexes_list)
 
         experiment_label = "testing_comparison"
@@ -1917,11 +1959,12 @@ def main():
     np.random.seed(123)
     train_split = [0.6]
     val_split = [0.2]
-    # train_split = np.random.rand(10)
+
     single_holdout = ParametricPortifolio(
         data_path=data_path, risk_constant=risk_constant,
-        train_split=train_split, val_split=val_split, learning_rate=0.027971, 
-        l2_regularization=7.851760e-08, epochs_size=2000, patience=5, plot_weights=True
+        train_split=train_split, val_split=val_split,
+        plot_weights=False, plot_heatmap=True,
+        benchmark_type='value_weighted'
         )
     single_holdout._start()
 
