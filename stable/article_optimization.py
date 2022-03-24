@@ -1207,12 +1207,49 @@ class ParametricPortifolio():
         torch_benchmark, torch_r, sol_theta, firm_characteristics, 
         r, w_benchmark, data_type, data_size):
         """
-        Create comparison excel for CDI and IBOV benchmark
+        Create comparison excel using all returns
+        found from NN and OPT model with CDI and IBOV benchmarks.
+
+        Parameters
+        ----------
+        optimized_nn: utils.ParametricPortifolioNN
+            Neural network object trained with 
+            best found theta ( weights ).
+        torch_characteristics: torch.Tensor
+            Normalized firm characteristcs dataframe
+            reshaped to torch.Tensor with shape
+            (characteristics size, time, number of stocks).
+        number_of_stocks: int
+            Number of stocks to be used in this experiment
+        torch_benchmark: torch.Tensor
+            Benchmark weights. Using
+            shape (time, number of stocks) instead of original
+            (number of stocks, time).
+        torch_r: torch.Tensor
+            Return of the stocks. Changed shape
+            to be (time, number of stocks) instead of original
+            (number of stocks, time).
+        sol_theta: numpy.Array
+            Best theta founded on optimization.
+        firm_characteristics: pandas.DataFrame
+            Normalized firm characteristcs dataframe.
+        r: numpy.Array
+            Array of returns
+        w_benchmark: numpy.Array
+            Array of benchmark weights
+        data_type: str
+            Data period to be compared.
+            Use test, train or val.
+        data_size: [int, ]
+            List of data index to be used
+
         """
+        # Get NN theta (weights) and create portfolio weights
         w_nn = optimized_nn.weights(torch_characteristics[:-1]).squeeze(-1)*1/(number_of_stocks) + torch_benchmark[:-1]
         w_nn_constrained = torch.Tensor(constrain_weights(w_nn.detach().numpy().T).T)
         r_nn_constrained_sequence = torch.sum((w_nn_constrained*torch_r[1:]), dim=1)
 
+        # Get OPT theta and create portfolio weights
         w = np.empty(shape=(number_of_stocks, len(data_size)))
         for i in range(number_of_stocks):
             firm_df = firm_characteristics[i].copy()
@@ -1224,6 +1261,7 @@ class ParametricPortifolio():
 
         data_dimension = len(data_size[1:])
 
+        ## Compare returns with CDI and IBOV for same given time.
         cdi_return = self.cdi_return.loc[data_size[1:]].reset_index()['Taxa SELIC']
         ibov_return = self.ibov_return.loc[data_size[1:]].reset_index()['Var%']
         
@@ -1279,20 +1317,25 @@ class ParametricPortifolio():
         Parameters
         ----------
 
-        mcap: pandas.DataFrame
+        self.mcap: pandas.DataFrame
             Market capitalization of the firms
-        lreturn: pandas.DataFrame
+        self.lreturn: pandas.DataFrame
             Lagged return of the firms.
-        book_to_mkt_ratio: pandas.DataFrame
+        self.book_to_mkt_ratio: pandas.DataFrame
             Book to market ratio of the firms
-        monthly_return: pandas.DataFrame
+        self.monthly_return: pandas.DataFrame
             Monthly return of the firms.
-        stocks_names: [str, ]
+        self.stocks_names: [str, ]
             List of stock names as strings.
+        self.risk_constant: int
+            Risk constant, increase it to become more risk averse.
+        
+        self.market_cost
+        self.value_weighted
+
+
         indexes_list: [( [int, ], [int, ] )]
             List of tuples containing training indexes and testing indexes.
-        risk_constant: int
-            Risk constant, increase it to become more risk averse.
 
         Returns
         -------
@@ -1311,6 +1354,57 @@ class ParametricPortifolio():
             Optimized return on test set.
         test_r_std: float
             Optimized return standard deviation on test set.
+
+        
+        self.train_market_cost
+        self.val_market_cost
+        self.test_market_cost
+
+        self.torch_characteristics
+        self.torch_r
+        self.torch_benchmark
+        self.number_of_stocks
+        self.torch_characteristics_val
+        self.torch_r_val
+        self.torch_benchmark_val
+
+
+
+        self.mean_obj_r_runs
+        self.mean_obj_r_val_runs
+
+        self.mean_r_runs
+        self.mean_constrained_r_runs
+        self.mean_constrained_transaction_r_runs
+
+        self.benchmark_mean_return_runs
+
+        self.nn_loss_runs
+        self.nn_return_runs
+        self.nn_return_runs_std
+
+        self.nn_val_loss_runs
+        self.nn_val_return_runs
+        self.nn_val_return_runs_std
+
+        self.benchmark_test_r_runs
+        self.benchmark_test_r_runs_std
+
+        self.test_r_runs
+        self.test_r_runs_std
+        self.test_r_constrained_runs
+        self.test_r_constrained_runs_std
+        self.test_r_constrained_transaction_runs
+        self.test_r_constrained_transaction_runs_std
+
+
+        self.test_r_nn_runs
+        self.test_r_nn_runs_std
+        self.test_r_nn_constrained_runs
+        self.test_r_nn_constrained_runs_std
+        self.test_r_nn_constrained_transaction_runs
+        self.test_r_nn_constrained_transaction_runs_std
+
 
         """
         LOGGER.info("Started experiment.")
@@ -1338,12 +1432,10 @@ class ParametricPortifolio():
             self.test_market_cost = self.market_cost.loc[test]
 
             #### TRAINING CHARACTERISTICS
-            self.training = True
             firm_characteristics, r, time, number_of_stocks = self.create_characteristics(train_me, train_mom, train_btm, train_return)
-            self.training = False
             firm_characteristics_val, r_val, time_val, number_of_stocks = self.create_characteristics(val_me, val_mom, val_btm, val_return)
 
-            ### Creating weights to a benchmark portifolio using uniform weighted returns
+            ### Creating weights to a benchmark portifolio
             if self.benchmark_type == 'value_weighted':
                 w_benchmark = self.value_weighted.iloc[train].T.to_numpy()
                 w_benchmark_val = self.value_weighted.iloc[val].T.to_numpy()
@@ -1366,15 +1458,6 @@ class ParametricPortifolio():
 
             best_config = self.get_best_hyperparameter_config()
 
-            # best_config = {
-            #     'learning_rate':self.learning_rate,
-            #     'l2_regularization':self.l2_regularization,
-            #     'epochs_size':self.epochs_size,
-            #     'adam_betha1':0.9,
-            #     'adam_betha2':0.999,
-            #     'patience':self.patience,
-            # }
-
             optimized_nn = self.nn_optimizer(
                 torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val, best_config)
 
@@ -1386,7 +1469,6 @@ class ParametricPortifolio():
             self.optimizing_step(firm_characteristics, r, time, number_of_stocks, theta0, w_benchmark, firm_characteristics_val, r_val, time_val, w_benchmark_val)
 
             sol_theta = self.sol.x
-            # sol_theta = ''
 
             btm = self.book_to_mkt_ratio
             me = self.mcap
@@ -1406,18 +1488,18 @@ class ParametricPortifolio():
                 firm_characteristics_global, r_global, w_benchmark_global
                 )
 
-            ## HARDCODED
-            global_ = np.arange(203)
+            # Compare return from each time to same time in IBOV and CDI
+            global_ = np.arange(time_global)
             self.create_comparison_excel(
             optimized_nn, torch_characteristics_global, number_of_stocks,
             torch_benchmark_global, torch_r_global, sol_theta, firm_characteristics_global, 
             r_global, w_benchmark_global, 'global', global_)
 
 
-            ### Evaluate founded theta on test samples and find its mean return from optimized and benchmark.
+            ### Evaluate founded theta on test samples and find its mean return from optimized and nn models.
             self.evaluate_theta(sol_theta, test_me, test_mom, test_btm, test_return, optimized_nn, test)
             
-            # Optimization step
+            # Optimization step training values
             self.mean_obj_r_runs.append(self.mean_obj_r)
             self.mean_obj_r_val_runs.append(self.mean_obj_r_val)
             self.mean_r_runs.append(self.mean_r)
@@ -1425,8 +1507,7 @@ class ParametricPortifolio():
             self.mean_constrained_transaction_r_runs.append(self.mean_constrained_transaction_r)
             self.benchmark_mean_return_runs.append(benchmark_mean_return)
 
-            # Optimization NN step
-
+            # Optimization NN step training values
             self.nn_loss_runs.append(self.nn_loss)
             self.nn_return_runs.append(self.nn_return)
             self.nn_return_runs_std.append(self.nn_return_std)
@@ -1435,7 +1516,7 @@ class ParametricPortifolio():
             self.nn_val_return_runs.append(self.nn_val_return )
             self.nn_val_return_runs_std.append(self.nn_val_return_std)
 
-            # Test step
+            # Optimization step test values
             self.benchmark_test_r_runs.append(self.benchmark_test_r)
             self.benchmark_test_r_runs_std.append(self.benchmark_test_r_std)
 
@@ -1448,14 +1529,12 @@ class ParametricPortifolio():
             self.test_r_constrained_transaction_runs.append(self.test_r_constrained_transaction)
             self.test_r_constrained_transaction_runs_std.append(self.test_r_constrained_transaction_std)
 
-            # Test step NN
-
+            # Optimization NN step test values
             self.test_r_nn_runs.append(self.test_r_nn)
             self.test_r_nn_runs_std.append(self.test_r_nn_std)
 
             self.test_r_nn_constrained_runs.append(self.test_r_nn_constrained)
             self.test_r_nn_constrained_runs_std.append(self.test_r_nn_constrained_std)
-
 
             self.test_r_nn_constrained_transaction_runs.append(self.test_r_nn_constrained_transaction)
             self.test_r_nn_constrained_transaction_runs_std.append(self.test_r_nn_constrained_transaction_std)
@@ -1465,6 +1544,13 @@ class ParametricPortifolio():
     def plot_animated_heatmap(self, weight_list, weight_type, experiment_label):
         """
         Plot animated heatmap from weights over epochs
+
+        Parameters
+        ----------
+        weight_list: [numpy.Array, ]
+        weight_type: str
+        experiment_label: str
+
         """
         plt.rcParams["figure.figsize"] = [12, 9]
         plt.rcParams["figure.autolayout"] = True
@@ -1494,6 +1580,62 @@ class ParametricPortifolio():
     def plot_final_results(self, experiment_label):
         """
         Plot returns through optimization and in benchmark test.
+
+        Parameters
+        ----------
+
+        experiment_label: str
+
+        self.mean_obj_r_runs
+        self.benchmark_mean_return_runs
+        self.mean_r_runs
+        self.mean_constrained_r_runs
+        self.mean_constrained_transaction_r_runs
+
+        self.mean_obj_r_val_runs
+
+        # need to add to runs
+        self.mean_r_val
+
+        self.benchmark_test_r_runs
+        self.benchmark_test_r_runs_std
+        self.test_r_runs
+        self.test_r_runs_std
+        self.test_r_constrained_runs
+        self.test_r_constrained_runs_std
+        self.test_r_constrained_transaction_runs
+        self.test_r_constrained_transaction_runs_std
+
+        self.test_r_nn_runs
+        self.test_r_nn_runs_std
+        self.test_r_nn_constrained_runs
+        self.test_r_nn_constrained_runs_std
+        self.test_r_nn_constrained_transaction_runs
+
+
+        self.nn_return_runs
+        self.nn_val_return_runs
+
+        # need to add to runs
+        self.nn_return_constrained
+        self.nn_val_return_constrained
+
+        self.nn_loss_runs
+        self.nn_val_loss_runs
+
+        self.test_cdi_return
+        self.test_ibov_return
+
+        self.weights_computed
+
+        Returns
+        -------
+        self.sharp_ratio
+        self.sharp_ratio_constrained 
+
+        self.sharp_ratio_nn
+        self.sharp_ratio_constrained_nn
+
         """
         # Train results
         mean_obj_r_runs=self.mean_obj_r_runs
