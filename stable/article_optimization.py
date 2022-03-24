@@ -635,7 +635,6 @@ class ParametricPortifolio():
             Portfolio weight with constraints
             for each epoch using training period.
 
-
         self.nn_loss: [ float, ]
             Training objective function
             over epochs in training.
@@ -866,7 +865,6 @@ class ParametricPortifolio():
         self.test_r_constrained_transaction_std: float
             Standard deviation from return at test 
             set using constrained weights and transaction costs.
-
 
         self.weights_computed: dict( list(numpy.Array, ) )
             Weights computed from NN and OPT best thetas at
@@ -1693,7 +1691,6 @@ class ParametricPortifolio():
             Each run produces a list of mean return for 
             each optimization step.
 
-        # need to add to runs
         self.mean_r_val: [float, ]
             List of validation return using optimized weights through each optimization step.
 
@@ -1745,7 +1742,6 @@ class ParametricPortifolio():
             constrained weights and transaction costs 
             for each run with neural network model.
 
-
         self.nn_return_runs: [[float, ], ]
             List of a list of mean return from
             neural network model at traning period.
@@ -1755,7 +1751,6 @@ class ParametricPortifolio():
             Same as nn_return_runs, only change
             the time period to validation.
 
-        # need to add to runs
         self.nn_return_constrained: [ numpy.Array, ]
             Mean return over epochs using
             constrained weights in training period.

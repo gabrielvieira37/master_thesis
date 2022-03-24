@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Article optimization module documentation &mdash; Portfolio Optmization 1.0.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Utils module documentation" href="utils.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> Portfolio Optmization
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="utils.html">Utils module documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Article optimization module documentation</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Portfolio Optmization</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Article optimization module documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/portifolio_optimization.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-article_optimization">
+<span id="article-optimization-module-documentation"></span><h1>Article optimization module documentation<a class="headerlink" href="#module-article_optimization" title="Permalink to this headline"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">article_optimization.</span></span><span class="sig-name descname"><span class="pre">ParametricPortifolio</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">risk_constant</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_split</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_split</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">benchmark_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_weights</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_heatmap</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio" title="Permalink to this definition"></a></dt>
+<dd><p>Parametric portifolio using firm characteristics
+to adjust portifolio weights.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.calculate_statistics">
+<span class="sig-name descname"><span class="pre">calculate_statistics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">w_test</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_r_sequence</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">matrix_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_cdi_return</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_test</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.calculate_statistics" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate all statistics for each model chosen</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>w_test</strong> (<em>numpy.Array</em>) – Weights from chosen model</p></li>
+<li><p><strong>test_r_sequence</strong> (<em>numpy.Array</em>) – Return from chosen model</p></li>
+<li><p><strong>matrix_type</strong> (<em>str</em>) – Set this as ‘opt’ if using
+optimizer matrix</p></li>
+<li><p><strong>test_cdi_return</strong> (<em>numpy.Array</em>) – Risk free return</p></li>
+<li><p><strong>r_test</strong> (<em>numpy.Array</em>) – Raw return in specific format</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>stats_info</strong> – Dictionary containing multiple
+statistical information.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.create_characteristics">
+<span class="sig-name descname"><span class="pre">create_characteristics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">me_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mom_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">btm_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_df</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.create_characteristics" title="Permalink to this definition"></a></dt>
+<dd><p>Create firm characteristics complete dataframe</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>me_df</strong> (<em>pandas.DataFrame</em>) – Market capitalization datafame.</p></li>
+<li><p><strong>mom_df</strong> (<em>pandas.DataFrame</em>) – Lagged return dataframe.</p></li>
+<li><p><strong>btm_df</strong> (<em>pandas.DataFrame</em>) – Book to market ratio dataframe.</p></li>
+<li><p><strong>stock_names</strong> (<em>[</em><em>str</em><em>,</em><em>]</em>) – List of stock names as strings.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>firm_characteristics</strong> (<em>pandas.DataFrame</em>) – Normalized firm characteristcs dataframe.</p></li>
+<li><p><strong>r</strong> (<em>numpy.array</em>) – Return of the stocks through time.</p></li>
+<li><p><strong>time</strong> (<em>int</em>) – Number of time periods this slice of firm characterists are evaluating.</p></li>
+<li><p><strong>number_of_stocks</strong> (<em>int</em>) – Number of stocks that we created the firm characteristics dataframe.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.create_comparison_excel">
+<span class="sig-name descname"><span class="pre">create_comparison_excel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">optimized_nn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torch_characteristics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_stocks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torch_benchmark</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torch_r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sol_theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">firm_characteristics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w_benchmark</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_size</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.create_comparison_excel" title="Permalink to this definition"></a></dt>
+<dd><p>Create comparison excel using all returns
+found from NN and OPT model with CDI and IBOV benchmarks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>optimized_nn</strong> (<a class="reference internal" href="utils.html#utils.ParametricPortifolioNN" title="utils.ParametricPortifolioNN"><em>utils.ParametricPortifolioNN</em></a>) – Neural network object trained with
+best found theta ( weights ).</p></li>
+<li><p><strong>torch_characteristics</strong> (<em>torch.Tensor</em>) – Normalized firm characteristcs dataframe
+reshaped to torch.Tensor with shape
+(characteristics size, time, number of stocks).</p></li>
+<li><p><strong>number_of_stocks</strong> (<em>int</em>) – Number of stocks to be used in this experiment</p></li>
+<li><p><strong>torch_benchmark</strong> (<em>torch.Tensor</em>) – Benchmark weights. Using
+shape (time, number of stocks) instead of original
+(number of stocks, time).</p></li>
+<li><p><strong>torch_r</strong> (<em>torch.Tensor</em>) – Return of the stocks. Changed shape
+to be (time, number of stocks) instead of original
+(number of stocks, time).</p></li>
+<li><p><strong>sol_theta</strong> (<em>numpy.Array</em>) – Best theta founded on optimization.</p></li>
+<li><p><strong>firm_characteristics</strong> (<em>pandas.DataFrame</em>) – Normalized firm characteristcs dataframe.</p></li>
+<li><p><strong>r</strong> (<em>numpy.Array</em>) – Array of returns</p></li>
+<li><p><strong>w_benchmark</strong> (<em>numpy.Array</em>) – Array of benchmark weights</p></li>
+<li><p><strong>data_type</strong> (<em>str</em>) – Data period to be compared.
+Use test, train or val.</p></li>
+<li><p><strong>data_size</strong> (<em>[</em><em>int</em><em>, </em><em>]</em>) – List of data index to be used</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.create_experiment">
+<span class="sig-name descname"><span class="pre">create_experiment</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">indexes_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.create_experiment" title="Permalink to this definition"></a></dt>
+<dd><p>Create experiment using characteristics, list of stocks to look up,
+indexes of how to split data and the constant of risk aversion.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>self.mcap</strong> (<em>pandas.DataFrame</em>) – Market capitalization of the firms</p></li>
+<li><p><strong>self.lreturn</strong> (<em>pandas.DataFrame</em>) – Lagged return of the firms.</p></li>
+<li><p><strong>self.book_to_mkt_ratio</strong> (<em>pandas.DataFrame</em>) – Book to market ratio of the firms</p></li>
+<li><p><strong>self.monthly_return</strong> (<em>pandas.DataFrame</em>) – Monthly return of the firms.</p></li>
+<li><p><strong>self.stocks_names</strong> (<em>[</em><em>str</em><em>, </em><em>]</em>) – List of stock names as strings.</p></li>
+<li><p><strong>self.risk_constant</strong> (<em>int</em>) – Risk constant, increase it to become more risk averse.</p></li>
+<li><p><strong>self.market_cost</strong> (<em>numpy.Array</em>) – Array with market cost using stock volume as base.</p></li>
+<li><p><strong>self.value_weighted</strong> (<em>numpy.Array</em>) – Value weighted benchamrk using market cap.</p></li>
+<li><p><strong>indexes_list</strong> (<em>[</em><em>( </em><em>[</em><em>int</em><em>, </em><em>]</em><em>, </em><em>[</em><em>int</em><em>, </em><em>] </em><em>)</em><em>]</em>) – List of tuples containing training indexes and testing indexes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>self.train_market_cost</strong> (<em>numpy.Array</em>) – Spllited market cost into train period</p></li>
+<li><p><strong>self.val_market_cost</strong> (<em>numpy.Array</em>) – Spllited market cost into validation period</p></li>
+<li><p><strong>self.test_market_cost</strong> (<em>numpy.Array</em>) – Spllited market cost into test period</p></li>
+<li><p><strong>self.torch_characteristics</strong> (<em>torch.Tensor</em>) – Firm characteristics transformed to tensor and having shape
+of (characteristics size, time, number of stocks) instead of
+(number of stocks, time, characteristics size).</p></li>
+<li><p><strong>self.torch_r</strong> (<em>torch.Tensor</em>) – Return of the stocks through training period. Changed shape
+to be (time, number of stocks) instead of original
+(number of stocks, time).</p></li>
+<li><p><strong>self.torch_benchmark</strong> (<em>torch.Tensor</em>) – Benchmark weights for training period. Using
+shape (time, number of stocks) instead of original
+(number of stocks, time).</p></li>
+<li><p><strong>self.number_of_stocks</strong> (<em>int</em>) – Number of stocks to be used in this experiment</p></li>
+<li><p><strong>self.torch_characteristics_val</strong> (<em>torch.Tensor</em>) – Firm characteristics from validation period
+transformed to tensor . Same shape change
+from training period applies.</p></li>
+<li><p><strong>self.torch_r_val</strong> (<em>torch.Tensor</em>) – Return of the stocks through validation period.
+Same shape change from training period applies.</p></li>
+<li><p><strong>self.torch_benchmark_val</strong> (<em>torch.Tensor</em>) – Benchmark weights for validation period. Same
+shape change from training period applies.</p></li>
+<li><p><em># taining parameters</em></p></li>
+<li><p><strong>self.mean_obj_r_runs</strong> (<em>[[float, ], ]</em>) – List of a list of objective values from
+optimized model at training period. Each
+run produces a list of objective values
+for each optimization step.</p></li>
+<li><p><strong>self.mean_obj_r_val_runs</strong> (<em>[[float, ], ]</em>) – Same as mean_obj_r_runs only change
+time period to validation period.</p></li>
+<li><p><strong>self.mean_r_runs</strong> (<em>[[float, ], ]</em>) – List of a list of mean return from
+optimized model at training period. Each
+run produces a list of mean return
+for each optimization step.</p></li>
+<li><p><strong>self.mean_constrained_r_runs</strong> (<em>[[float, ], ]</em>) – List of a list of mean return from
+optimized model at training period using
+constrained weights. Each run produces a
+list of mean return for each optimization
+step.</p></li>
+<li><p><strong>self.mean_constrained_transaction_r_runs</strong> (<em>[[float, ], ]</em>) – List of a list of mean return from
+optimized model at training period using
+constrained weights and transaction costs.
+Each run produces a list of mean return for
+each optimization step.</p></li>
+<li><p><strong>self.benchmark_mean_return_runs</strong> (<em>[float, ]</em>) – List of benchmark mean return for each run.
+It is constant throughout all training process.</p></li>
+<li><p><strong>self.nn_loss_runs</strong> (<em>[[float, ], ]</em>) – List of a list of loss from
+neural network model at traning period.
+Each run produces a list of loss
+for each epoch.</p></li>
+<li><p><strong>self.nn_return_runs</strong> (<em>[[float, ], ]</em>) – List of a list of mean return from
+neural network model at traning period.
+Each run produces a list of mean return
+for each epoch.</p></li>
+<li><p><strong>self.nn_return_runs_std</strong> (<em>[[float, ], ]</em>) – List of a list of std from return from
+neural network model at traning period.
+Each run produces a list of std from
+return for each epoch.</p></li>
+<li><p><strong>self.nn_val_loss_runs</strong> (<em>[[float, ], ]</em>) – Same as nn_loss_runs, only change
+the time period to validation.</p></li>
+<li><p><strong>self.nn_val_return_runs</strong> (<em>[[float, ], ]</em>) – Same as nn_return_runs, only change
+the time period to validation.</p></li>
+<li><p><strong>self.nn_val_return_runs_std</strong> (<em>[[float, ], ]</em>) – Same as nn_return_runs_std, only change
+the time period to validation.</p></li>
+<li><p><em># test parameters</em></p></li>
+<li><p><strong>self.benchmark_test_r_runs</strong> (<em>[float, ]</em>) – Benchmark mean return for test period
+at each run.</p></li>
+<li><p><strong>self.benchmark_test_r_runs_std</strong> (<em>[float, ]</em>) – Benchmark std from return for test period
+at each run.</p></li>
+<li><p><strong>self.test_r_runs</strong> (<em>[float, ]</em>) – List of mean return on test set for
+each run with optmization model.</p></li>
+<li><p><strong>self.test_r_runs_std</strong> (<em>[float, ]</em>) – List of std from return on test set for
+each run with optmization model.</p></li>
+<li><p><strong>self.test_r_constrained_runs</strong> (<em>[float, ]</em>) – List of mean return on test set using
+constrained weights for each run
+with optmization model.</p></li>
+<li><p><strong>self.test_r_constrained_runs_std</strong> (<em>[float, ]</em>) – List of std from return on test set using
+constrained weights for each run and
+with optmization model.</p></li>
+<li><p><strong>self.test_r_constrained_transaction_runs</strong> (<em>[float, ]</em>) – List of mean return on test set using
+constrained weights and transaction costs
+for each run with optmization model.</p></li>
+<li><p><strong>self.test_r_constrained_transaction_runs_std</strong> (<em>[float, ]</em>) – List of std from return on test set using
+constrained weights and transaction costs
+for each run with optmization model.</p></li>
+<li><p><strong>self.test_r_nn_runs</strong> (<em>[float, ]</em>) – List of mean return on test set for
+each run with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_runs_std</strong> (<em>[float, ]</em>) – List of std from return on test set for
+each run with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_constrained_runs</strong> (<em>[float, ]</em>) – List of mean return on test set using
+constrained weights for each run
+with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_constrained_runs_std</strong> (<em>[float, ]</em>) – List of std from return on test set using
+constrained weights for each run
+with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_constrained_transaction_runs</strong> (<em>[float, ]</em>) – List of mean return on test set using
+constrained weights and transaction costs
+for each run with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_constrained_transaction_runs_std</strong> (<em>[float, ]</em>) – List of std from return on test set using
+constrained weights and transaction costs
+for each run with neural network model.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.evaluate_theta">
+<span class="sig-name descname"><span class="pre">evaluate_theta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sol_theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_me</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_mom</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_btm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_return</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimized_nn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.evaluate_theta" title="Permalink to this definition"></a></dt>
+<dd><p>Evaluate theta optimized return on test sample.
+Evaluate theta (weights) from NN on test sample.
+Create return comparison with CDI and IBOV.
+Calculate statistics from all returns.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sol_theta</strong> (<em>numpy.array</em>) – Best theta founded on optimization.</p></li>
+<li><p><strong>test_me</strong> (<em>pandas.DataFrame</em>) – Test set of the market capitalization characteristic.</p></li>
+<li><p><strong>test_mom</strong> (<em>pandas.DataFrame</em>) – Test set of the lagged return characteristic.</p></li>
+<li><p><strong>test_btm</strong> (<em>pandas.DataFrame</em>) – Test set of the book to market ratio characteristic.</p></li>
+<li><p><strong>test_return</strong> (<em>pandas.DataFrame</em>) – Test set of the returns.</p></li>
+<li><p><strong>optimized_nn</strong> (<a class="reference internal" href="utils.html#utils.ParametricPortifolioNN" title="utils.ParametricPortifolioNN"><em>utils.ParametricPortifolioNN</em></a>) – Neural network object trained with
+best found theta ( weights ).</p></li>
+<li><p><strong>test</strong> (<em>[ </em><em>int</em><em>, </em><em>]</em>) – List of test indexes.</p></li>
+<li><p><strong>self.benchmark_type</strong> (<em>str</em>) – Parameter to indicate which benchmark to use
+‘value_weighted’ for VW portifolio or
+‘equally_weighted’ for EQ portifolio.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>self.benchmark_test_r</strong> (<em>float</em>) – Benchmark return on test set.</p></li>
+<li><p><strong>self.benchmark_test_r_std</strong> (<em>float</em>) – Benchmark return standard deviation on test set.</p></li>
+<li><p><strong>self.test_r</strong> (<em>float</em>) – Optimized return on test set.</p></li>
+<li><p><strong>self.test_r_std</strong> (<em>float</em>) – Optimized return standard deviation on test set.</p></li>
+<li><p><strong>self.test_r_constrained</strong> (<em>float</em>) – Mean return at test set using constrained weights</p></li>
+<li><p><strong>self.test_r_constrained_std</strong> (<em>float.</em>) – Standard deviation from return at test
+set using constrained weights.</p></li>
+<li><p><strong>self.test_r_constrained_transaction</strong> (<em>float</em>) – Mean return at test set using constrained weights
+and transaction costs.</p></li>
+<li><p><strong>self.test_r_constrained_transaction_std</strong> (<em>float</em>) – Standard deviation from return at test
+set using constrained weights and transaction costs.</p></li>
+<li><p><strong>self.weights_computed</strong> (<em>dict( list(numpy.Array, ) )</em>) – Weights computed from NN and OPT best thetas at
+test period. Also save constrained weight versions.</p></li>
+<li><p><em>self.test_r_nn</em> – Mean return on test set using neural networks.</p></li>
+<li><p><em>self.test_r_nn_std</em> – Standard deviation from return on test set
+using neural networks.</p></li>
+<li><p><em>self.test_r_nn_constrained</em> – Mean return on test set using neural networks
+and weights constraints.</p></li>
+<li><p><em>self.test_r_nn_constrained_std</em> – Standard deviation return on test set using neural
+networks and weights constraints.</p></li>
+<li><p><em>self.test_r_nn_constrained_transaction</em> – Mean return on test set using neural networks, weights
+constraints and transaction costs.</p></li>
+<li><p><em>self.test_r_nn_constrained_transaction_std</em> – Standard deviation return on test set using neural networks,
+weights constraints and transaction costs.</p></li>
+<li><p><em>self.test_cdi_return</em> – CDI return sequence at test set.</p></li>
+<li><p><em>self.test_ibov_return</em> – IBOV return sequence at test set.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.get_best_hyperparameter_config">
+<span class="sig-name descname"><span class="pre">get_best_hyperparameter_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.get_best_hyperparameter_config" title="Permalink to this definition"></a></dt>
+<dd><p>Get best hyperparameter config using hyperparamter optimization</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>self.nn_hyperparameter_optimizer</strong> (<em>function</em>) – Function to map hyperparamter optimization with nn optimization</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>best_config</strong> – Dictionary containing best hyperparameter config such as :
+learning_rate, l2_regularization, epochs_size, adam_betha1, adam_betha2 and patience.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.load_data">
+<span class="sig-name descname"><span class="pre">load_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.load_data" title="Permalink to this definition"></a></dt>
+<dd><p>Load returns and firms characteristics from path.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>self.data_path</strong> (<em>str</em>) – The path where data are.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>self.lreturn</strong> (<em>pandas.DataFrame</em>) – Lagged return of the firms.</p></li>
+<li><p><strong>self.mcap</strong> (<em>pandas.DataFrame</em>) – Market capitalization of the firms</p></li>
+<li><p><strong>self.book_to_mkt_ratio</strong> (<em>pandas.DataFrame</em>) – Book to market ratio of the firms</p></li>
+<li><p><strong>self.monthly_return</strong> (<em>pandas.DataFrame</em>) – Monthly return of the firms.</p></li>
+<li><p><strong>self.market_cost</strong> (<em>pandas.DataFrame</em>) – Market cost using market volume</p></li>
+<li><p><strong>self.value_weighted</strong> (<em>pandas.DataFrame</em>) – Value weighted benchmark using market cap</p></li>
+<li><p><strong>self.cdi_return</strong> (<em>pandas.DataFrame</em>) – CDI return from data time range</p></li>
+<li><p><strong>self.ibov_return</strong> (<em>pandas.DataFrame</em>) – IBOV return from data time range</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.nn_hyperparameter_optimizer">
+<span class="sig-name descname"><span class="pre">nn_hyperparameter_optimizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.nn_hyperparameter_optimizer" title="Permalink to this definition"></a></dt>
+<dd><p>Optimize hyperparameters using baysean optimization</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>self.nn_optimizer</strong> (<em>function</em>) – Function to perform portifolio optimization using neural networks.</p></li>
+<li><p><strong>self.torch_characteristics</strong> (<em>torch.Tensor</em>) – Firm characteristics transformed to tensor and having shape
+of (characteristics size, time, number of stocks) instead of
+(number of stocks, time, characteristics size).</p></li>
+<li><p><strong>self.torch_r</strong> (<em>torch.Tensor</em>) – Return of the stocks through training period. Changed shape
+to be (time, number of stocks) instead of original
+(number of stocks, time).</p></li>
+<li><p><strong>self.torch_benchmark</strong> (<em>torch.Tensor</em>) – Benchmark weights for training period. Using
+shape (time, number of stocks) instead of original
+(number of stocks, time).</p></li>
+<li><p><strong>self.number_of_stocks</strong> (<em>Int</em>) – Number of stocks to be used in this experiment</p></li>
+<li><p><strong>self.torch_characteristics_val</strong> (<em>torch.Tensor</em>) – Firm characteristics from validation period
+transformed to tensor . Same shape change
+from training period applies.</p></li>
+<li><p><strong>self.torch_r_val</strong> (<em>torch.Tensor</em>) – Return of the stocks through validation period.
+Same shape change from training period applies.</p></li>
+<li><p><strong>self.torch_benchmark_val</strong> (<em>torch.Tensor</em>) – Benchmark weights for validation period. Same
+shape change from training period applies.</p></li>
+<li><p><strong>config</strong> (<em>Dict</em>) – Dictionary containing all hyperparameters to be used.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>Does not return anything but report to hyperparameter</em></p></li>
+<li><p><em>optimization the result using current hyperparameter configuration.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.nn_optimizer">
+<span class="sig-name descname"><span class="pre">nn_optimizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">torch_characteristics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torch_r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torch_benchmark</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_stocks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torch_characteristics_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torch_r_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">torch_benchmark_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.nn_optimizer" title="Permalink to this definition"></a></dt>
+<dd><p>Optimize and fing theta using a neural network. Theta is the weights of the optimized NN.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>torch_characteristics</strong> (<em>torch.Tensor</em>) – Firm characteristics transformed to tensor and having shape
+of (characteristics size, time, number of stocks) instead of
+(number of stocks, time, characteristics size).</p></li>
+<li><p><strong>torch_r</strong> (<em>torch.Tensor</em>) – Return of the stocks through training period. Changed shape
+to be (time, number of stocks) instead of original
+(number of stocks, time).</p></li>
+<li><p><strong>torch_benchmark</strong> (<em>torch.Tensor</em>) – Benchmark weights for training period. Using
+shape (time, number of stocks) instead of original
+(number of stocks, time).</p></li>
+<li><p><strong>number_of_stocks</strong> (<em>int</em>) – Number of stocks to be used in this experiment</p></li>
+<li><p><strong>torch_characteristics_val</strong> (<em>torch.Tensor</em>) – Firm characteristics from validation period
+transformed to tensor . Same shape change
+from training period applies.</p></li>
+<li><p><strong>torch_r_val</strong> (<em>torch.Tensor</em>) – Return of the stocks through validation period.
+Same shape change from training period applies.</p></li>
+<li><p><strong>torch_benchmark_val</strong> (<em>torch.Tensor</em>) – Benchmark weights for validation period. Same
+shape change from training period applies.</p></li>
+<li><p><strong>config</strong> (<em>dict</em>) – Dictionary containing best hyperparameter config such as :
+learning_rate, l2_regularization, epochs_size, adam_betha1, adam_betha2 and patience.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>self.nn_weight_list</strong> (<em>[ numpy.Array, ]</em>) – Portfolio weight for each epoch
+using training period.</p></li>
+<li><p><strong>self.nn_weight_list_constrained</strong> (<em>[ numpy.Array, ]</em>) – Portfolio weight with constraints
+for each epoch using training period.</p></li>
+<li><p><strong>self.nn_loss</strong> (<em>[ float, ]</em>) – Training objective function
+over epochs in training.</p></li>
+<li><p><strong>self.nn_return</strong> (<em>[ numpy.Array, ]</em>) – Mean return over epochs in
+training period.</p></li>
+<li><p><strong>self.nn_return_std</strong> (<em>[ numpy.Array, ]</em>) – Standard deviation from return
+over epochs in training period.</p></li>
+<li><p><strong>self.nn_return_constrained</strong> (<em>[ numpy.Array, ]</em>) – Mean return over epochs using
+constrained weights in training period.</p></li>
+<li><p><strong>self.nn_val_loss</strong> (<em>[ float, ]</em>) – Training objective function
+over epochs in validation period.</p></li>
+<li><p><strong>self.nn_val_return</strong> (<em>[ numpy.Array, ]</em>) – Mean return over epochs in
+validation period.</p></li>
+<li><p><strong>self.nn_val_return_std</strong> (<em>[ numpy.Array, ]</em>) – Standard deviation from return
+over epochs in validation period.</p></li>
+<li><p><strong>self.nn_val_return_constrained</strong> (<em>[ numpy.Array, ]</em>) – Mean return over epochs using
+constrained weights in validation period.</p></li>
+<li><p><strong>optimized_nn</strong> (<em>utils.ParametricPortifolioNN</em>) – Neural network object trained with
+best found theta ( weights ).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.normalize_characteristics">
+<span class="sig-name descname"><span class="pre">normalize_characteristics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">firm_characteristics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">characteristics_names</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.normalize_characteristics" title="Permalink to this definition"></a></dt>
+<dd><p>Normalize firm characteristics by subtracting it by the mean of all stocks at each time,
+and dividing it by the std of all stocks at each time. Making it have unit variance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>firm_characteristics</strong> (<em>pandas.DataFrame</em>) – Unnormalized firm characteristcs dataframe.</p></li>
+<li><p><strong>characteristics_names</strong> (<em>[</em><em>str</em><em>, </em><em>]</em>) – List of characteristics names. e.g.: ‘me’,’btm’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>firm_characteristics</strong> – Normalized firm characteristcs dataframe.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pandas.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.optimizing_step">
+<span class="sig-name descname"><span class="pre">optimizing_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">firm_characteristics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_stocks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w_benchmark</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">firm_characteristics_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w_benchmark_val</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.optimizing_step" title="Permalink to this definition"></a></dt>
+<dd><p>Find the coefficient theta that best maps the firm characteristics and the returns.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>firm_characteristics</strong> (<em>pandas.DataFrame</em>) – Normalized firm characteristcs dataframe.</p></li>
+<li><p><strong>r</strong> (<em>numpy.array</em>) – Return of the stocks through time.</p></li>
+<li><p><strong>time</strong> (<em>int</em>) – Number of time periods this slice of firm characterists are evaluating.</p></li>
+<li><p><strong>number_of_stocks</strong> (<em>int</em>) – Number of stocks that we created the firm characteristics dataframe.</p></li>
+<li><p><strong>theta0</strong> (<em>numpy.array</em>) – Initial coefficients mapping the return and the firm characteristics.</p></li>
+<li><p><strong>w_benchmark</strong> (<em>numpy.array</em>) – Benchmark weights, used to create optimized weights.</p></li>
+<li><p><strong>transaction_cost</strong> (<em>float</em>) – Define transaction cost.</p></li>
+<li><p><strong>firm_characteristics_val</strong> (<em>pandas.DataFrame</em>) – Normalized firm characteristcs dataframe from validation period.</p></li>
+<li><p><strong>r_val</strong> (<em>numpy.array</em>) – Return of the stocks through time from validation period.</p></li>
+<li><p><strong>time_val</strong> (<em>int</em>) – Number of time periods this slice of firm characterists are evaluating on validation period.</p></li>
+<li><p><strong>w_benchmark_val</strong> (<em>numpy.array</em>) – Benchmark weights, used to create optimized weights using validation period.</p></li>
+<li><p><strong>self.risk_constant</strong> (<em>int</em>) – Risk constant, increase it to become more risk averse.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>self.sol</strong> (<em>scipy.optimize.OptimizeResult</em>) – Solution object used to retrieve theta optimized and optimization information.</p></li>
+<li><p><strong>self.mean_obj_r</strong> (<em>[float, ]</em>) – List of objective values through each optimization step.</p></li>
+<li><p><strong>self.mean_r</strong> (<em>[float, ]</em>) – List of return using optimized weights through each optimization step.</p></li>
+<li><p><strong>self.mean_obj_r_val</strong> (<em>[float, ]</em>) – List of objective validation values through each optimization step.</p></li>
+<li><p><strong>self.mean_r_val</strong> (<em>[float, ]</em>) – List of validation return using optimized weights through each optimization step.</p></li>
+<li><p><strong>self.mean_constrained_r</strong> (<em>[float, ]</em>) – List of return constrained using weights with 30% of leverage.</p></li>
+<li><p><strong>self.mean_constrained_transaction_r</strong> (<em>[float, ]</em>) – List of return constrained adding transaction costs.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.plot_animated_heatmap">
+<span class="sig-name descname"><span class="pre">plot_animated_heatmap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">weight_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experiment_label</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.plot_animated_heatmap" title="Permalink to this definition"></a></dt>
+<dd><p>Plot animated heatmap from weights over epochs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>weight_list</strong> (<em>[</em><em>numpy.Array</em><em>, </em><em>]</em>) – List of generated weights from each epoch.</p></li>
+<li><p><strong>weight_type</strong> (<em>str</em>) – String to tell if weights are from nn or nn_constrained.</p></li>
+<li><p><strong>experiment_label</strong> (<em>str</em>) – Experiment label to be used on saved gif.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="article_optimization.ParametricPortifolio.plot_final_results">
+<span class="sig-name descname"><span class="pre">plot_final_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">experiment_label</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#article_optimization.ParametricPortifolio.plot_final_results" title="Permalink to this definition"></a></dt>
+<dd><p>Plot returns through optimization and in benchmark test.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>experiment_label</strong> (<em>str</em>) – </p></li>
+<li><p><strong>self.mean_obj_r_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – List of a list of objective values from
+optimized model at training period. Each
+run produces a list of objective values
+for each optimization step.</p></li>
+<li><p><strong>self.mean_obj_r_val_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – Same as mean_obj_r_runs only change
+time period to validation period.</p></li>
+<li><p><strong>self.benchmark_mean_return_runs</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of benchmark mean return for each run.
+It is constant throughout all training process.</p></li>
+<li><p><strong>self.mean_r_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – List of a list of mean return from
+optimized model at training period. Each
+run produces a list of mean return
+for each optimization step.</p></li>
+<li><p><strong>self.mean_constrained_r_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – List of a list of mean return from
+optimized model at training period using
+constrained weights. Each run produces a
+list of mean return for each optimization
+step.</p></li>
+<li><p><strong>self.mean_constrained_transaction_r_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – List of a list of mean return from
+optimized model at training period using
+constrained weights and transaction costs.
+Each run produces a list of mean return for
+each optimization step.</p></li>
+<li><p><strong>self.mean_r_val</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of validation return using optimized weights through each optimization step.</p></li>
+<li><p><strong>self.benchmark_test_r_runs</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – Benchmark mean return for test period</p></li>
+<li><p><strong>self.benchmark_test_r_runs_std</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – Benchmark std from return for test period
+at each run.</p></li>
+<li><p><strong>self.test_r_runs</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of mean return on test set for
+each run with optmization model.</p></li>
+<li><p><strong>self.test_r_runs_std</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of std from return on test set for
+each run with optmization model.</p></li>
+<li><p><strong>self.test_r_constrained_runs</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of mean return on test set using
+constrained weights for each run
+with optmization model.</p></li>
+<li><p><strong>self.test_r_constrained_runs_std</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of std from return on test set using
+constrained weights for each run and
+with optmization model.</p></li>
+<li><p><strong>self.test_r_constrained_transaction_runs</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of mean return on test set using
+constrained weights and transaction costs
+for each run with optmization model.</p></li>
+<li><p><strong>self.test_r_constrained_transaction_runs_std</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of std from return on test set using
+constrained weights and transaction costs
+for each run with optmization model.</p></li>
+<li><p><strong>self.test_r_nn_runs</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of mean return on test set for
+each run with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_runs_std</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of std from return on test set for
+each run with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_constrained_runs</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of mean return on test set using
+constrained weights for each run
+with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_constrained_runs_std</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of std from return on test set using
+constrained weights for each run
+with neural network model.</p></li>
+<li><p><strong>self.test_r_nn_constrained_transaction_runs</strong> (<em>[</em><em>float</em><em>, </em><em>]</em>) – List of mean return on test set using
+constrained weights and transaction costs
+for each run with neural network model.</p></li>
+<li><p><strong>self.nn_return_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – List of a list of mean return from
+neural network model at traning period.
+Each run produces a list of mean return
+for each epoch.</p></li>
+<li><p><strong>self.nn_val_return_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – Same as nn_return_runs, only change
+the time period to validation.</p></li>
+<li><p><strong>self.nn_return_constrained</strong> (<em>[ </em><em>numpy.Array</em><em>, </em><em>]</em>) – Mean return over epochs using
+constrained weights in training period.</p></li>
+<li><p><strong>self.nn_val_return_constrained</strong> (<em>[ </em><em>numpy.Array</em><em>, </em><em>]</em>) – Mean return over epochs using
+constrained weights in validation period.</p></li>
+<li><p><strong>self.nn_loss_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – List of a list of loss from
+neural network model at traning period.
+Each run produces a list of loss
+for each epoch.</p></li>
+<li><p><strong>self.nn_val_loss_runs</strong> (<em>[</em><em>[</em><em>float</em><em>, </em><em>]</em><em>, </em><em>]</em>) – Same as nn_loss_runs, only change
+the time period to validation.</p></li>
+<li><p><strong>self.test_cdi_return</strong> – CDI return sequence at test set.</p></li>
+<li><p><strong>self.test_ibov_return</strong> – IBOV return sequence at test set.</p></li>
+<li><p><strong>self.weights_computed</strong> (<em>dict</em><em>( </em><em>list</em><em>(</em><em>numpy.Array</em><em>, </em><em>) </em><em>)</em>) – Weights computed from NN and OPT best thetas at
+test period. Also save constrained weight versions.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>self.sharp_ratio</strong> (<em>numpy.Array</em>) – Array of Sharpe ratios from each
+run at test set with optmized model.</p></li>
+<li><p><strong>self.sharp_ratio_constrained</strong> (<em>numpy.Array</em>) – Array of Sharpe ratios from each
+run at test set using constrained weights
+with optmized model.</p></li>
+<li><p><strong>self.sharp_ratio_nn</strong> (<em>numpy.Array</em>) – Array of Sharpe ratios from each
+run at test set with neural network model.</p></li>
+<li><p><strong>self.sharp_ratio_constrained_nn</strong> (<em>numpy.Array</em>) – Array of Sharpe ratios from each
+run at test set using constrained weights
+with neural network model.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="utils.html" class="btn btn-neutral float-left" title="Utils module documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022, Gabriel Vieira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
