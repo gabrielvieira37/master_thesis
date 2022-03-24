@@ -380,7 +380,7 @@ def calculate_best_validation_technique(firm_characteristics):
     
     total_passed_tests = 0
 
-    # Stocks with accel < 1.2
+    # Stocks with acceleration < 1.2
     total_passed_tests += (np.array(btm_list) < 1.2).sum()
     total_passed_tests += (np.array(me_list) < 1.2).sum()
     total_passed_tests += (np.array(mom_list) < 1.2).sum()
@@ -400,7 +400,7 @@ def calculate_best_validation_technique(firm_characteristics):
     
     total_passed_tests = 0
 
-    # Stocks with Perc05 < 1.6
+    # Stocks with Percentil05 < 1.6
     total_passed_tests += (np.array(btm_q_list) < 1.6).sum()
     total_passed_tests += (np.array(me_q_list) < 1.6).sum()
     total_passed_tests += (np.array(mom_q_list) < 1.6).sum()

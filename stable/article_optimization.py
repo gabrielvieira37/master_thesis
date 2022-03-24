@@ -658,7 +658,7 @@ class ParametricPortifolio():
         self.nn_val_return_std: [ numpy.Array, ]
             Standard deviation from return
             over epochs in validation period.
-        self.nn_val_return_constrained [ numpy.Array, ]
+        self.nn_val_return_constrained: [ numpy.Array, ]
             Mean return over epochs using
             constrained weights in validation period.
 
@@ -1367,10 +1367,8 @@ class ParametricPortifolio():
             for each optimization step.
 
         self.mean_obj_r_val_runs: [[float, ], ]
-            List of a list of objective values from 
-            optimized model at validation period. Each 
-            run produces a list of objective values 
-            for each optimization step.
+            Same as mean_obj_r_runs only change 
+            time period to validation period.
 
         self.mean_r_runs: [[float, ], ]
             List of a list of mean return from 
@@ -1397,30 +1395,84 @@ class ParametricPortifolio():
             It is constant throughout all training process.
 
         self.nn_loss_runs: [[float, ], ]
+            List of a list of loss from
+            neural network model at traning period.
+            Each run produces a list of loss
+            for each epoch.
         self.nn_return_runs: [[float, ], ]
+            List of a list of mean return from
+            neural network model at traning period.
+            Each run produces a list of mean return
+            for each epoch.
         self.nn_return_runs_std: [[float, ], ]
+            List of a list of std from return from
+            neural network model at traning period.
+            Each run produces a list of std from 
+            return for each epoch.
 
         self.nn_val_loss_runs: [[float, ], ]
+            Same as nn_loss_runs, only change
+            the time period to validation.
         self.nn_val_return_runs: [[float, ], ]
+            Same as nn_return_runs, only change
+            the time period to validation.
         self.nn_val_return_runs_std: [[float, ], ]
+            Same as nn_return_runs_std, only change
+            the time period to validation.
 
         # test parameters
         self.benchmark_test_r_runs: [float, ]
+            Benchmark mean return for test period
+            at each run.
         self.benchmark_test_r_runs_std: [float, ]
+            Benchmark std from return for test period
+            at each run.
 
         self.test_r_runs: [float, ]
+            List of mean return on test set for
+            each run with optmization model.
         self.test_r_runs_std: [float, ]
+            List of std from return on test set for
+            each run with optmization model.
         self.test_r_constrained_runs: [float, ]
+            List of mean return on test set using
+            constrained weights for each run 
+            with optmization model.
         self.test_r_constrained_runs_std: [float, ]
+            List of std from return on test set using
+            constrained weights for each run and
+            with optmization model.
         self.test_r_constrained_transaction_runs: [float, ]
+            List of mean return on test set using
+            constrained weights and transaction costs 
+            for each run with optmization model.
         self.test_r_constrained_transaction_runs_std: [float, ]
+            List of std from return on test set using
+            constrained weights and transaction costs 
+            for each run with optmization model.
 
         self.test_r_nn_runs: [float, ]
+            List of mean return on test set for
+            each run with neural network model.            
         self.test_r_nn_runs_std: [float, ]
+            List of std from return on test set for
+            each run with neural network model.   
         self.test_r_nn_constrained_runs: [float, ]
+            List of mean return on test set using
+            constrained weights for each run 
+            with neural network model.
         self.test_r_nn_constrained_runs_std: [float, ]
+            List of std from return on test set using
+            constrained weights for each run 
+            with neural network model.
         self.test_r_nn_constrained_transaction_runs: [float, ]
+            List of mean return on test set using
+            constrained weights and transaction costs 
+            for each run with neural network model.
         self.test_r_nn_constrained_transaction_runs_std: [float, ]
+            List of std from return on test set using
+            constrained weights and transaction costs 
+            for each run with neural network model.
 
         """
         LOGGER.info("Started experiment.")
@@ -1609,55 +1661,142 @@ class ParametricPortifolio():
 
         experiment_label: str
 
-        self.mean_obj_r_runs
-        self.benchmark_mean_return_runs
-        self.mean_r_runs
-        self.mean_constrained_r_runs
-        self.mean_constrained_transaction_r_runs
+        self.mean_obj_r_runs: [[float, ], ]
+            List of a list of objective values from 
+            optimized model at training period. Each 
+            run produces a list of objective values 
+            for each optimization step.
+        
+        self.mean_obj_r_val_runs: [[float, ], ]
+            Same as mean_obj_r_runs only change 
+            time period to validation period.
 
-        self.mean_obj_r_val_runs
+        self.benchmark_mean_return_runs: [float, ]
+            List of benchmark mean return for each run.
+            It is constant throughout all training process.
+
+        self.mean_r_runs: [[float, ], ]
+            List of a list of mean return from 
+            optimized model at training period. Each 
+            run produces a list of mean return 
+            for each optimization step.
+        self.mean_constrained_r_runs:  [[float, ], ]
+            List of a list of mean return from 
+            optimized model at training period using
+            constrained weights. Each run produces a 
+            list of mean return for each optimization 
+            step.
+        self.mean_constrained_transaction_r_runs: [[float, ], ]
+            List of a list of mean return from 
+            optimized model at training period using
+            constrained weights and transaction costs. 
+            Each run produces a list of mean return for 
+            each optimization step.
 
         # need to add to runs
-        self.mean_r_val
+        self.mean_r_val: [float, ]
+            List of validation return using optimized weights through each optimization step.
 
-        self.benchmark_test_r_runs
-        self.benchmark_test_r_runs_std
-        self.test_r_runs
-        self.test_r_runs_std
-        self.test_r_constrained_runs
-        self.test_r_constrained_runs_std
-        self.test_r_constrained_transaction_runs
-        self.test_r_constrained_transaction_runs_std
+        self.benchmark_test_r_runs:  [float, ]
+            Benchmark mean return for test period 
+        self.benchmark_test_r_runs_std: [float, ]
+            Benchmark std from return for test period
+            at each run.
 
-        self.test_r_nn_runs
-        self.test_r_nn_runs_std
-        self.test_r_nn_constrained_runs
-        self.test_r_nn_constrained_runs_std
-        self.test_r_nn_constrained_transaction_runs
+        self.test_r_runs: [float, ]
+            List of mean return on test set for
+            each run with optmization model.
+        self.test_r_runs_std: [float, ]
+            List of std from return on test set for
+            each run with optmization model.
+        self.test_r_constrained_runs: [float, ]
+            List of mean return on test set using
+            constrained weights for each run 
+            with optmization model.
+        self.test_r_constrained_runs_std: [float, ]
+            List of std from return on test set using
+            constrained weights for each run and
+            with optmization model.
+        self.test_r_constrained_transaction_runs: [float, ]
+            List of mean return on test set using
+            constrained weights and transaction costs 
+            for each run with optmization model.
+        self.test_r_constrained_transaction_runs_std: [float, ]
+            List of std from return on test set using
+            constrained weights and transaction costs 
+            for each run with optmization model.
+
+        self.test_r_nn_runs: [float, ]
+            List of mean return on test set for
+            each run with neural network model.  
+        self.test_r_nn_runs_std: [float, ]
+            List of std from return on test set for
+            each run with neural network model.  
+        self.test_r_nn_constrained_runs: [float, ]
+            List of mean return on test set using
+            constrained weights for each run 
+            with neural network model.
+        self.test_r_nn_constrained_runs_std: [float, ]
+            List of std from return on test set using
+            constrained weights for each run 
+            with neural network model.
+        self.test_r_nn_constrained_transaction_runs: [float, ]
+            List of mean return on test set using
+            constrained weights and transaction costs 
+            for each run with neural network model.
 
 
-        self.nn_return_runs
-        self.nn_val_return_runs
+        self.nn_return_runs: [[float, ], ]
+            List of a list of mean return from
+            neural network model at traning period.
+            Each run produces a list of mean return
+            for each epoch.
+        self.nn_val_return_runs: [[float, ], ]
+            Same as nn_return_runs, only change
+            the time period to validation.
 
         # need to add to runs
-        self.nn_return_constrained
-        self.nn_val_return_constrained
+        self.nn_return_constrained: [ numpy.Array, ]
+            Mean return over epochs using
+            constrained weights in training period.
+        self.nn_val_return_constrained: [ numpy.Array, ]
+            Mean return over epochs using
+            constrained weights in validation period.
 
-        self.nn_loss_runs
-        self.nn_val_loss_runs
+        self.nn_loss_runs: [[float, ], ]
+            List of a list of loss from
+            neural network model at traning period.
+            Each run produces a list of loss
+            for each epoch.
+        self.nn_val_loss_runs: [[float, ], ]
+            Same as nn_loss_runs, only change
+            the time period to validation.
 
-        self.test_cdi_return
-        self.test_ibov_return
+        self.test_cdi_return:
+            CDI return sequence at test set.
+        self.test_ibov_return:
+            IBOV return sequence at test set.
 
-        self.weights_computed
+        self.weights_computed: dict( list(numpy.Array, ) )
+            Weights computed from NN and OPT best thetas at
+            test period. Also save constrained weight versions.
 
         Returns
         -------
-        self.sharp_ratio
-        self.sharp_ratio_constrained 
-
-        self.sharp_ratio_nn
-        self.sharp_ratio_constrained_nn
+        self.sharp_ratio: numpy.Array
+            Array of Sharpe ratios from each
+            run at test set with optmized model.
+        self.sharp_ratio_constrained : numpy.Array
+            Array of Sharpe ratios from each
+            run at test set using constrained weights
+            with optmized model.
+        self.sharp_ratio_nn: numpy.Array
+            Array of Sharpe ratios from each
+            run at test set with neural network model.
+        self.sharp_ratio_constrained_nn: numpy.Array
+            Array of Sharpe ratios from each
+            run at test set using constrained weights
+            with neural network model.
 
         """
         pathlib.Path('images').mkdir(exist_ok=True)
