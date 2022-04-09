@@ -1,5 +1,6 @@
 """
 """
+from collections import defaultdict
 import matplotlib.pyplot as plt
 import logging
 import numpy as np
@@ -7,6 +8,7 @@ import pandas as pd
 import os
 import torch
 import torch.nn as nn
+from scipy.stats import skew
 import torch.nn.functional as F
 torch.random.manual_seed(123)
 
@@ -112,7 +114,7 @@ def create_w_benchmark(number_of_stocks, time):
     return w_benchmark
 
 
-def data_split(size, train_percentage, val_percentage):
+def data_split(size, train_percentage, val_percentage, test_percentage):
     """
     Define indexes for splitted train and test set using a split percentage.
 
@@ -125,15 +127,19 @@ def data_split(size, train_percentage, val_percentage):
     
     Returns
     -------
-    indexes_list: [( [int, ], [int, ] )]
+    indexes_list: [( [int, ], [int, ] [int, ])]
         List of tuples containing training indexes and testing indexes.
 
     """
     train_size = int(size*train_percentage)
     val_end_split = int(size*(train_percentage+val_percentage))
+    test_end_split = int(size*(train_percentage+val_percentage+test_percentage))
     train_index =np.arange(train_size)
     val_index = np.arange(start=train_size, stop=val_end_split)
-    test_index = np.arange(start=val_end_split, stop=size)
+    if test_end_split < size:
+        test_index = np.arange(start=val_end_split, stop=test_end_split)
+    else:
+        test_index = np.arange(start=val_end_split, stop=size)
     indexes_list = [(train_index, val_index, test_index)]
     LOGGER.info(f'Train size: {train_size}, val size: {val_end_split-train_size}, test size: {size-val_end_split}')
     return indexes_list
@@ -350,40 +356,60 @@ def calculate_best_validation_technique(firm_characteristics):
     btm_q_list = []
     me_q_list = []
     mom_q_list = []
+
+    btm_95_list = []
+    me_95_list = []
+    mom_95_list = []
+
+    btm_s_list = []
+    me_s_list = []
+    mom_s_list = []
+
+    btm_features = defaultdict(list)
+    me_features = defaultdict(list)
+    mom_features = defaultdict(list)
+
     number_of_characteristics = 3
     
     LOGGER.info("Started to calculate the best validation technique.")
 
     number_of_stocks = firm_characteristics.shape[1] // number_of_characteristics
-    for i in range(number_of_stocks):
-        sm_char = firm_characteristics.rolling(12, min_periods=1).mean()
-        em_char = firm_characteristics.ewm(alpha=0.1, adjust=False).mean()
-        
+    sm_char = firm_characteristics.rolling(12, min_periods=1).mean()
+    em_char = firm_characteristics.ewm(alpha=0.1, adjust=False).mean()
+    q5 = firm_characteristics.quantile(0.05)
+    q95 = firm_characteristics.quantile(0.95)
+
+    for i in range(number_of_stocks):        
+        # Acceleration calculation
         btm_ = sm_char[i]['btm'].mean() / em_char[i]['btm'].mean()
         me_ = sm_char[i]['me'].mean() / em_char[i]['me'].mean()
         mom_ = sm_char[i]['mom'].mean() / em_char[i]['mom'].mean()
-        
-        
-        q5 = firm_characteristics.quantile(0.05)
+    
+        btm_s = skew(firm_characteristics[i]['btm'])
+        me_s = skew(firm_characteristics[i]['me'])
+        mom_s = skew(firm_characteristics[i]['mom'])
 
-        btm_q = q5[i]['btm']
-        me_q = q5[i]['me']
-        mom_q = q5[i]['mom']
-        
-        btm_list.append(btm_)
-        me_list.append(me_)
-        mom_list.append(mom_)
-        
-        btm_q_list.append(btm_q)
-        me_q_list.append(me_q)
-        mom_q_list.append(mom_q)
+        btm_features['q5'].append(q5[i]['btm'])
+        btm_features['q95'].append(q95[i]['btm'])
+        btm_features['skew'].append(btm_s)
+        btm_features['accel'].append(btm_)
+
+        me_features['q5'].append(q5[i]['me'])
+        me_features['q95'].append(q95[i]['me'])
+        me_features['skew'].append(me_s)
+        me_features['accel'].append(me_)
+
+        mom_features['q5'].append(q5[i]['mom'])
+        mom_features['q95'].append(q95[i]['mom'])
+        mom_features['skew'].append(mom_s)
+        mom_features['accel'].append(mom_)
     
     total_passed_tests = 0
 
     # Stocks with acceleration < 1.2
-    total_passed_tests += (np.array(btm_list) < 1.2).sum()
-    total_passed_tests += (np.array(me_list) < 1.2).sum()
-    total_passed_tests += (np.array(mom_list) < 1.2).sum()
+    total_passed_tests += (np.array(btm_features['acceç']) < 1.2).sum()
+    total_passed_tests += (np.array(me_features['accel']) < 1.2).sum()
+    total_passed_tests += (np.array(mom_features['accel']) < 1.2).sum()
     
     threshold = (number_of_stocks*number_of_characteristics)//2
     
@@ -400,22 +426,50 @@ def calculate_best_validation_technique(firm_characteristics):
     
     total_passed_tests = 0
 
-    # Stocks with Percentil05 < 1.6
-    total_passed_tests += (np.array(btm_q_list) < 1.6).sum()
-    total_passed_tests += (np.array(me_q_list) < 1.6).sum()
-    total_passed_tests += (np.array(mom_q_list) < 1.6).sum()
+    # Stocks with Percentil05 < -1.6
+    total_passed_tests += (np.array(btm_features['q5']) < -1.6).sum()
+    total_passed_tests += (np.array(me_features['q5']) < -1.6).sum()
+    total_passed_tests += (np.array(mom_features['q5']) < -1.6).sum()
     
     # If half of the possible tests not passed
+    if total_passed_tests > threshold:
+        LOGGER.info("Holdout is the best validation technique.")
+        LOGGER.info("You may stop this experiment and choose this validation technique.")
+        LOGGER.info("Finished calculation of best validation technique.")
+        return
+    
+
+    total_passed_tests = 0
+
+    # Stocks with Percentil95 < 1.5
+    total_passed_tests += (np.array(btm_features['q95']) < 1.5).sum()
+    total_passed_tests += (np.array(me_features['q95']) < 1.5).sum()
+    total_passed_tests += (np.array(mom_features['q95']) < 1.5).sum()
+
     if total_passed_tests < threshold:
         LOGGER.info(
             f"Only {total_passed_tests} tests passed " + 
             f"out of {number_of_stocks*number_of_characteristics}."
             )
-        LOGGER.info("Holdout is not the best validation technique you may choose another.")
-        LOGGER.info("You may stop this experiment and choose another.")
+        LOGGER.info("Preq-Grow is not the best validation technique you may choose another.")
+        LOGGER.info("You may stop this experiment and find another validation technique.")
         LOGGER.info("Finished calculation of best validation technique.")
         return
-        
-    LOGGER.info("Holdout is the best validation technique.")
-    LOGGER.info("We can continue our experiment without a problem.")
+
+    total_passed_tests = 0
+
+    # Stocks with Skewness < 0.3
+    total_passed_tests += (np.array(btm_features['skew']) < 0.3).sum()
+    total_passed_tests += (np.array(me_features['skew']) < 0.3).sum()
+    total_passed_tests += (np.array(mom_features['skew']) < 0.3).sum()
+
+    if total_passed_tests > threshold:
+        LOGGER.info("Preq-Grow is the best validation technique.")
+        LOGGER.info("We can continue our experiment without a problem.")
+        LOGGER.info("Finished calculation of best validation technique.")
+        return
+
+
+    LOGGER.info("Preq-Grow isn't the best validation technique.")
+    LOGGER.info("We should stop our experiment and find another validation technique")
     LOGGER.info("Finished calculation of best validation technique.")

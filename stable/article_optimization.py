@@ -1,9 +1,18 @@
 import datetime
 import warnings
 import os
+
+# After the first iteraction the ParametricPortifolio Object
+# gets many parameters and ends up larger than 200MB.
+# Ray fails to tune a function that has size larger tahn 95MB
+# So to avoid this we set the threshold to 2.5GB since we will
+# only use some of their parameters and not all of them.
+os.environ['FUNCTION_SIZE_ERROR_THRESHOLD'] = f'{2500*1024*1024}'
+
 import logging
 import json
 import pathlib
+import ray
 import torch
 import numpy as np
 import pandas as pd
@@ -52,7 +61,7 @@ class ParametricPortifolio():
     to adjust portifolio weights.
     """
 
-    def __init__(self, data_path, risk_constant, train_split, val_split, benchmark_type, plot_weights, plot_heatmap):
+    def __init__(self, data_path, risk_constant, train_split, val_split, test_split, benchmark_type, plot_weights, plot_heatmap):
         """
         Initialize object with data path, risk constant, 
         the percentage of train split and validation split, 
@@ -84,6 +93,7 @@ class ParametricPortifolio():
         self.risk_constant = risk_constant
         self.train_split = train_split
         self.val_split = val_split
+        self.test_split = test_split
         self.plot_weights = plot_weights
 
         self.benchmark_type = benchmark_type
@@ -102,15 +112,18 @@ class ParametricPortifolio():
         self.mean_constrained_r_runs = []
         self.mean_constrained_transaction_r_runs = []
         self.benchmark_mean_return_runs = []
+        self.mean_r_val_runs = []
 
         # Train values nn
         self.nn_loss_runs = []
         self.nn_return_runs = []
         self.nn_return_runs_std = []
+        self.nn_return_constrained_runs = []
 
         self.nn_val_loss_runs = []
         self.nn_val_return_runs = []
         self.nn_val_return_runs_std = []
+        self.nn_val_return_constrained_runs = []
 
         # Test values
         self.benchmark_test_r_runs = []
@@ -568,11 +581,11 @@ class ParametricPortifolio():
         # Using baysean optimization
         bayesopt = BayesOptSearch(verbose=0)
 
-        # Using 100 different samples to find the best 
+        # Using 25 different samples to find the best 
         # hyperparameter configuration
         analysis = tune.run(
             self.nn_hyperparameter_optimizer, config=config, progress_reporter=reporter, search_alg=bayesopt,
-            num_samples=100, metric="mean_loss", mode="min", verbose=0
+            num_samples=25, metric="mean_loss", mode="min", verbose=0
         )
 
         LOGGER.info("Finished NN hyperparameter optimization.")
@@ -1574,16 +1587,19 @@ class ParametricPortifolio():
             self.mean_r_runs.append(self.mean_r)
             self.mean_constrained_r_runs.append(self.mean_constrained_r)
             self.mean_constrained_transaction_r_runs.append(self.mean_constrained_transaction_r)
+            self.mean_r_val_runs.append(self.mean_r_val)
             self.benchmark_mean_return_runs.append(benchmark_mean_return)
 
             # Optimization NN step training values
             self.nn_loss_runs.append(self.nn_loss)
             self.nn_return_runs.append(self.nn_return)
             self.nn_return_runs_std.append(self.nn_return_std)
+            self.nn_return_constrained_runs.append(self.nn_return_constrained)
 
             self.nn_val_loss_runs.append(self.nn_val_loss)
             self.nn_val_return_runs.append(self.nn_val_return )
             self.nn_val_return_runs_std.append(self.nn_val_return_std)
+            self.nn_val_return_constrained_runs.append(self.nn_val_return_constrained)
 
             # Optimization step test values
             self.benchmark_test_r_runs.append(self.benchmark_test_r)
@@ -1631,7 +1647,7 @@ class ParametricPortifolio():
         fig = plt.figure()
         first_weight = weight_list[0]
         dimension = first_weight.shape
-        epochs = len(weight_list)//10
+        epochs = len(weight_list)//20
         min_w = min([w.min() for w in weight_list])
         max_w = max([w.max() for w in weight_list])
         ax = plt.axes()
@@ -1871,11 +1887,11 @@ class ParametricPortifolio():
             plt.plot(x, [benchmark_mean_return_runs[run]]*len(mean_r), label=f'Benchmark return, Run:{run+1}', c=colors[run], linestyle='dashed')
             plt.plot(x, mean_constrained_r_runs[run], label=f'Optimized return with weight constraints, Run:{run+1}', c=colors[run], linestyle='dotted')
             plt.plot(x, mean_constrained_transaction_r_runs[run], label=f'Optimized return with weight constraints and transaction costs, Run:{run+1}', c=colors[run], linestyle='dashdot')
-            plt.plot(x, self.mean_r_val, label=f'Optimized validation return, Run:{run+1}', c=colors[run+1])
+            plt.plot(x, self.mean_r_val_runs[run], label=f'Optimized validation return, Run:{run+1}', c=colors[run+1])
 
             plt.text(x[-1], mean_r[-1]*1.01, f'In sample \nreturn: {mean_r[-1]:.3f}%')
             plt.text(x[-1], mean_constrained_r_runs[run][-1]*1.01, f'In sample constrained return: \n{mean_constrained_r_runs[run][-1]:.3f}%')
-            plt.text(x[-1], self.mean_r_val[-1]*0.95, f'In sample validation \nreturn: {self.mean_r_val[-1]:.3f}%')
+            plt.text(x[-1], self.mean_r_val_runs[run][-1]*0.95, f'In sample validation \nreturn: {self.mean_r_val_runs[run][-1]:.3f}%')
         plt.xlabel('Iteration step')
         plt.ylabel('Mean return')
         plt.legend(loc="lower left")
@@ -1892,13 +1908,13 @@ class ParametricPortifolio():
             x = range(len(mean_r))
             plt.plot(x, mean_r, label=f'Optimized return, Run:{run+1}', c=colors[run])
             plt.plot(x, self.nn_val_return_runs[run], label=f'Optimized validation return, Run:{run+1}', c=colors[run+1])
-            plt.plot(x, self.nn_return_constrained, label=f'Optimized constrained return, Run:{run+1}', c=colors[run+2])
-            plt.plot(x, self.nn_val_return_constrained, label=f'Optimized constrained validation return, Run:{run+1}', c=colors[run+3])
+            plt.plot(x, self.nn_return_constrained_runs[run], label=f'Optimized constrained return, Run:{run+1}', c=colors[run+2])
+            plt.plot(x, self.nn_val_return_constrained_runs[run], label=f'Optimized constrained validation return, Run:{run+1}', c=colors[run+3])
 
             plt.text(x[-1], mean_r[-1]*1.01, f'In sample return: \n{mean_r[-1]:.3f}%')
             plt.text(x[-1], self.nn_val_return_runs[run][-1]*1.01, f'Validation return: \n{self.nn_val_return_runs[run][-1]:.3f}%')
-            plt.text(x[-1], self.nn_return_constrained[-1]*1.01, f'In sample constrained \nreturn: {self.nn_return_constrained[-1]:.3f}%')
-            plt.text(x[-1], self.nn_val_return_constrained[-1]*1.01, f'Validation constrained \nreturn: {self.nn_val_return_constrained[-1]:.3f}%')
+            plt.text(x[-1], self.nn_return_constrained_runs[run][-1]*1.01, f'In sample constrained \nreturn: {self.nn_return_constrained_runs[run][-1]:.3f}%')
+            plt.text(x[-1], self.nn_val_return_constrained_runs[run][-1]*1.01, f'Validation constrained \nreturn: {self.nn_val_return_constrained_runs[run][-1]:.3f}%')
         plt.ylabel("Mean return")
         plt.xlabel("Epochs")
         plt.legend()
@@ -2076,8 +2092,8 @@ class ParametricPortifolio():
         total_size = self.monthly_return.shape[0]
 
         indexes_list = []
-        for train_percentage, val_percentage in zip(self.train_split, self.val_split):
-            idxs_list, = data_split(total_size, train_percentage, val_percentage)
+        for train_percentage, val_percentage, test_percentage in zip(self.train_split, self.val_split, self.test_split):
+            idxs_list, = data_split(total_size, train_percentage, val_percentage, test_percentage)
             indexes_list.append(idxs_list)
         
         pathlib.Path("sheets").mkdir(exist_ok=True)
@@ -2091,14 +2107,15 @@ def main():
     data_path = "../data/"
     risk_constant = 5
     np.random.seed(123)
-    train_split = [0.6]
-    val_split = [0.2]
+    train_split = [0.2, 0.4, 0.6]
+    val_split = [0.2, 0.2, 0.2]
+    test_split = [0.2, 0.2, 0.2]
 
     single_holdout = ParametricPortifolio(
         data_path=data_path, risk_constant=risk_constant,
         train_split=train_split, val_split=val_split,
+        test_split=test_split, benchmark_type='value_weighted',
         plot_weights=False, plot_heatmap=True,
-        benchmark_type='value_weighted'
         )
     single_holdout._start()
 
