@@ -1870,7 +1870,7 @@ class ParametricPortifolio():
         for run, mean_obj_r in enumerate(mean_obj_r_runs):
             x = range(len(mean_obj_r))
             plt.plot(x, mean_obj_r, label=f'Objective return, Run:{run+1}', c=colors[run])
-            plt.plot(x, self.mean_obj_r_val_runs[run], label=f'Objective validation return, Run:{run+1}', c=colors[run+1])
+            plt.plot(x, self.mean_obj_r_val_runs[run], label=f'Objective validation return, Run:{run+1}', c=colors[run], linestyle='dashed')
         plt.xlabel('Iteration step')
         plt.ylabel('Objective return')
         plt.legend()
@@ -1887,7 +1887,7 @@ class ParametricPortifolio():
             plt.plot(x, [benchmark_mean_return_runs[run]]*len(mean_r), label=f'Benchmark return, Run:{run+1}', c=colors[run], linestyle='dashed')
             plt.plot(x, mean_constrained_r_runs[run], label=f'Optimized return with weight constraints, Run:{run+1}', c=colors[run], linestyle='dotted')
             plt.plot(x, mean_constrained_transaction_r_runs[run], label=f'Optimized return with weight constraints and transaction costs, Run:{run+1}', c=colors[run], linestyle='dashdot')
-            plt.plot(x, self.mean_r_val_runs[run], label=f'Optimized validation return, Run:{run+1}', c=colors[run+1])
+            plt.plot(x, self.mean_r_val_runs[run], label=f'Optimized validation return, Run:{run+1}', c=colors[run], linestyle='dashed', dash_joinstyle='round', dash_capstyle='round')
 
             plt.text(x[-1], mean_r[-1]*1.01, f'In sample \nreturn: {mean_r[-1]:.3f}%')
             plt.text(x[-1], mean_constrained_r_runs[run][-1]*1.01, f'In sample constrained return: \n{mean_constrained_r_runs[run][-1]:.3f}%')
@@ -1906,10 +1906,10 @@ class ParametricPortifolio():
         plt.title("Train return on NN")
         for run, mean_r in enumerate(self.nn_return_runs):
             x = range(len(mean_r))
-            plt.plot(x, mean_r, label=f'Optimized return, Run:{run+1}', c=colors[run])
-            plt.plot(x, self.nn_val_return_runs[run], label=f'Optimized validation return, Run:{run+1}', c=colors[run+1])
-            plt.plot(x, self.nn_return_constrained_runs[run], label=f'Optimized constrained return, Run:{run+1}', c=colors[run+2])
-            plt.plot(x, self.nn_val_return_constrained_runs[run], label=f'Optimized constrained validation return, Run:{run+1}', c=colors[run+3])
+            plt.plot(x, mean_r, label=f'NN return, Run:{run+1}', c=colors[run])
+            plt.plot(x, self.nn_val_return_runs[run], label=f'NN validation return, Run:{run+1}', c=colors[run], linestyle='dashed')
+            plt.plot(x, self.nn_return_constrained_runs[run], label=f'NN constrained return, Run:{run+1}', c=colors[run], linestyle='dotted')
+            plt.plot(x, self.nn_val_return_constrained_runs[run], label=f'NN constrained validation return, Run:{run+1}', c=colors[run], linestyle='dashdot')
 
             plt.text(x[-1], mean_r[-1]*1.01, f'In sample return: \n{mean_r[-1]:.3f}%')
             plt.text(x[-1], self.nn_val_return_runs[run][-1]*1.01, f'Validation return: \n{self.nn_val_return_runs[run][-1]:.3f}%')
@@ -1928,7 +1928,7 @@ class ParametricPortifolio():
         for run, loss in enumerate(self.nn_loss_runs):
             x = range(len(loss))
             plt.plot(x, loss, label=f'Objective loss, Run:{run+1}', c=colors[run])
-            plt.plot(x, self.nn_val_loss_runs[run], label=f'Objective validation loss, Run:{run+1}', c=colors[run+1])
+            plt.plot(x, self.nn_val_loss_runs[run], label=f'Objective validation loss, Run:{run+1}', c=colors[run], linestyle='dashed')
         plt.ylabel("Objective loss")
         plt.xlabel("Epochs")
         plt.legend()
