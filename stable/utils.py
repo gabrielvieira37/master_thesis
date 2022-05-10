@@ -141,7 +141,7 @@ def data_split(size, train_percentage, val_percentage, test_percentage):
     else:
         test_index = np.arange(start=val_end_split, stop=size)
     indexes_list = [(train_index, val_index, test_index)]
-    LOGGER.info(f'Train size: {train_size}, val size: {val_end_split-train_size}, test size: {size-val_end_split}')
+    LOGGER.info(f'Train size: {train_size}, val size: {val_end_split-train_size}, test size: {test_end_split-val_end_split}')
     return indexes_list
 
 

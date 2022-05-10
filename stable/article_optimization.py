@@ -125,6 +125,8 @@ class ParametricPortifolio():
         self.nn_val_return_runs_std = []
         self.nn_val_return_constrained_runs = []
 
+        self.best_config_runs = []
+
         # Test values
         self.benchmark_test_r_runs = []
         self.benchmark_test_r_runs_std = []
@@ -1557,6 +1559,9 @@ class ParametricPortifolio():
             self.torch_benchmark_val = torch_benchmark_val
 
             best_config = self.get_best_hyperparameter_config()
+            
+            ## TO-DO: put inside documentation
+            self.best_config_runs.append(best_config)
 
             optimized_nn = self.nn_optimizer(
                 torch_characteristics, torch_r, torch_benchmark, number_of_stocks, torch_characteristics_val, torch_r_val, torch_benchmark_val, best_config)
@@ -1864,6 +1869,31 @@ class ParametricPortifolio():
         if self.plot_heatmap == True:
             self.plot_animated_heatmap(self.nn_weight_list, 'nn', experiment_label)
             self.plot_animated_heatmap(self.nn_weight_list_constrained, 'nn_constrained', experiment_label)
+        
+        # Save best configs for each run
+        best_config_df = pd.DataFrame(self.best_config_runs)
+        best_config_df.to_csv('./sheets/best_config_throughout_runs.csv')
+        
+        # Plotting last weights distribution for constrained and unconstrained nn
+        last_dist_nn = self.nn_weight_list[-1][-1]
+        last_dist_nn_constrained = self.nn_weight_list_constrained[-1][-1]
+        x = range(len(last_dist_nn))
+        plt.figure(figsize=(12,9))
+        plt.title("Last NN distribution")
+        plt.plot(x, last_dist_nn)
+        plt.xlabel('Stock')
+        plt.ylabel('Weights')
+        plt.grid()
+        plt.savefig(f'./images/last_nn_weights_distribution{experiment_label}.jpg')
+
+
+        plt.figure(figsize=(12,9))
+        plt.title("Last constrained NN distribution")
+        plt.plot(x, last_dist_nn_constrained)
+        plt.xlabel('Stock')
+        plt.ylabel('Weights')
+        plt.grid()
+        plt.savefig(f'./images/last_constrained_nn_weights_distribution{experiment_label}.jpg')
 
         plt.figure(figsize=(12,9))
         plt.title("Mean utility function for each optimization step")
@@ -1894,7 +1924,7 @@ class ParametricPortifolio():
             plt.text(x[-1], self.mean_r_val_runs[run][-1]*0.95, f'In sample validation \nreturn: {self.mean_r_val_runs[run][-1]:.3f}%')
         plt.xlabel('Iteration step')
         plt.ylabel('Mean return')
-        plt.legend(loc="lower left")
+        # plt.legend(loc="lower left")
         # plt.legend()
         plt.grid()
         plt.savefig(f'./images/opt_mean_return_over_steps_{experiment_label}.jpg')
@@ -1946,21 +1976,7 @@ class ParametricPortifolio():
         br4 = [x + width for x in br3]
         br5 = [x + width for x in br4]
         br6 = [x + width for x in br5]
-        br7 = [x + width for x in br6]
-        br8 = [x + width for x in br7]
-        br9 = [x + width for x in br8]
-        plt.figure(figsize=(12,9))
-        plt.title("Mean return on test set with standard deviation.")
-        plt.ylabel('Mean return')
-        plt.bar(br1, test_r_mean, label='Optimized test return', yerr=test_r_mean_std, color='blue', width = 0.09)
-        plt.bar(br2, test_r_constrained_mean, label='Optimized test return with weight constraints', yerr=test_r_constrained_mean_std, color='green', width = 0.09)
-        plt.bar(br3, test_r_constrained_transaction_mean, label='Optimized test return with weight constraints and transaction costs.', yerr=test_r_constrained_transaction_mean_std, color='black', width = 0.09)
-        plt.bar(br4, benchmark_test_r_mean, label='Benchmark test return', yerr=benchmark_test_r_mean_std, color='red', width = 0.09)
-        plt.xticks([])
-        plt.grid()
-        plt.legend()
-        plt.savefig(f'./images/mean_return_test_set_with_std_{experiment_label}.jpg')
-        
+        br7 = [x + width for x in br6]        
         plt.close()
 
         plt.figure(figsize=(12,9))
@@ -1986,6 +2002,46 @@ class ParametricPortifolio():
         plt.legend(loc="center left")
         plt.savefig(f'./images/mean_return_comparison_test_set_{experiment_label}.jpg')
 
+
+        plt.figure(figsize=(12,9))
+        plt.title("Return on test set for each run")
+        plt.ylabel('Mean return')
+        width = 0.1
+        br = np.arange(1)
+        self.test_r_nn_runs_std
+        self.test_r_nn_constrained_runs_std
+
+        for idx, nn_test_return in enumerate(self.test_r_nn_runs):
+            inner_br = [x + width*idx for x in br]
+            plt.bar(
+                inner_br, nn_test_return,
+                yerr=self.test_r_nn_runs_std[idx],
+                label=f'Test mean return at run: {idx+1}',
+                color=colors[idx], width = 0.09, alpha=0.5
+            )
+            plt.text( width*idx-0.02, nn_test_return*1.01, f'Return  :{nn_test_return:.3f}%')
+        plt.xticks([])
+        plt.legend()
+        plt.savefig(f'./images/return_nn_test_set_{experiment_label}.jpg')
+
+
+        plt.figure(figsize=(12,9))
+        plt.title("Return on test set using constrained model for each run")
+        plt.ylabel('Mean return')
+        width = 0.1
+        br = np.arange(1)
+        for idx, constrained_nn_test_return in enumerate(self.test_r_nn_constrained_runs):
+            inner_br = [x + width*idx for x in br]
+            plt.bar(
+                inner_br, constrained_nn_test_return,
+                yerr=self.test_r_nn_constrained_runs_std[idx],
+                label=f'Constrained test mean return at run: {idx+1}',
+                color=colors[idx], width = 0.09, alpha=0.5
+            )
+            plt.text( width*idx-0.02, constrained_nn_test_return*1.01, f'Return  :{constrained_nn_test_return:.3f}%')
+        plt.xticks([])
+        plt.legend()
+        plt.savefig(f'./images/return_nn_constrained_test_set_{experiment_label}.jpg')
 
         plt.figure(figsize=(12,9))
         plt.title("Constraint mean return comparison")
@@ -2095,7 +2151,6 @@ class ParametricPortifolio():
         for train_percentage, val_percentage, test_percentage in zip(self.train_split, self.val_split, self.test_split):
             idxs_list, = data_split(total_size, train_percentage, val_percentage, test_percentage)
             indexes_list.append(idxs_list)
-        
         pathlib.Path("sheets").mkdir(exist_ok=True)
         self.create_experiment(indexes_list)
 
@@ -2115,7 +2170,7 @@ def main():
         data_path=data_path, risk_constant=risk_constant,
         train_split=train_split, val_split=val_split,
         test_split=test_split, benchmark_type='value_weighted',
-        plot_weights=False, plot_heatmap=True,
+        plot_weights=False, plot_heatmap=False,
         )
     single_holdout._start()
 
