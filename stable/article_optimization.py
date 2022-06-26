@@ -28,6 +28,7 @@ from dateutil.relativedelta import relativedelta
 from tqdm.notebook import tqdm
 from scipy.optimize import minimize
 from scipy.stats import kurtosis, skew
+from scipy.spatial.distance import jensenshannon
 from ray.tune.suggest.bayesopt import BayesOptSearch
 
 torch.random.manual_seed(123)
@@ -154,6 +155,20 @@ class ParametricPortifolio():
         self.weights_computed = {'optimized':[], 'optimized_constrained':[], 'nn_optimized':[], 'nn_optimized_constrained':[]}
 
         self.results_comparison = {}
+        self.status_df_runs = []
+
+        # Benchmark returns
+
+        self.test_cdi_return_runs = []
+        self.test_cdi_return_std_runs = []
+
+        self.test_ibov_return_runs = []
+        self.test_ibov_return_std_runs = []
+
+        # Thetas
+
+        self.nn_optimized_thetas = []
+        self.optimized_thetas = []
 
 
     # TO-DO: Change it to load any number of characteristics
@@ -1057,9 +1072,9 @@ class ParametricPortifolio():
 
         stats_df = pd.concat([nn_df, nn_constrained_df, opt_df, opt_constrained_df], axis=1).set_index('Statistic Name')
 
-        stats_df.to_excel('./sheets/return_statistics.xlsx')
+        ## ADD TO DOCUMENTATIO
+        self.status_df_runs.append(stats_df)
 
-    
         # Saving return variables into properties
         self.benchmark_test_r = benchmark_test_r
         self.benchmark_test_r_std  = benchmark_test_r_std
@@ -1629,6 +1644,22 @@ class ParametricPortifolio():
             self.test_r_nn_constrained_transaction_runs.append(self.test_r_nn_constrained_transaction)
             self.test_r_nn_constrained_transaction_runs_std.append(self.test_r_nn_constrained_transaction_std)
 
+
+            ## Benchmark returns on test values -- ADD TO DOCUMENTATION
+
+            self.test_cdi_return_runs.append(self.test_cdi_return.mean())
+            self.test_cdi_return_std_runs.append(self.test_cdi_return.std())
+
+            self.test_ibov_return_runs.append(self.test_ibov_return.mean())
+            self.test_ibov_return_std_runs.append(self.test_ibov_return.std())
+
+            # Thetas -- ADD TO DOCUMENTATION
+
+            self.optimized_thetas.append(sol_theta)
+            nn_theta = optimized_nn.weights.state_dict()['weight'].detach().numpy()
+            self.nn_optimized_thetas.append(nn_theta)
+
+
             LOGGER.info("Finished experiment.")
     
     def plot_animated_heatmap(self, weight_list, weight_type, experiment_label):
@@ -1816,6 +1847,19 @@ class ParametricPortifolio():
 
         """
         pathlib.Path('images').mkdir(exist_ok=True)
+        
+        ## ADD TO DOCUMENTATIO
+        stats_df = pd.concat(self.status_df_runs, axis=1).groupby(level=0, axis=1).mean()
+        stats_df.to_excel('./sheets/mean_return_statistics.xlsx')
+
+        runs_size = len(self.status_df_runs)
+        for run in range(runs_size):
+            self.status_df_runs[run].columns += f'Run {run}'
+
+        stats_df = pd.concat(self.status_df_runs, axis=1)
+        stats_df.to_excel('./sheets/detailed_return_statistics.xlsx')
+
+
         # Train results
         mean_obj_r_runs=self.mean_obj_r_runs
         benchmark_mean_return_runs=self.benchmark_mean_return_runs
@@ -1826,6 +1870,9 @@ class ParametricPortifolio():
         # Test results
         benchmark_test_r_mean = np.mean(self.benchmark_test_r_runs, axis=0)
         benchmark_test_r_mean_std= np.mean(self.benchmark_test_r_runs_std, axis=0)
+        cdi_mean_r = np.mean(self.test_cdi_return_runs, axis=0)
+        ibov_mean_r = np.mean(self.test_ibov_return_runs, axis=0)
+
         test_r_mean= np.mean(self.test_r_runs, axis=0)
         test_r_mean_std= np.mean(self.test_r_runs_std, axis=0)
         test_r_constrained_mean = np.mean(self.test_r_constrained_runs, axis=0)
@@ -1837,18 +1884,21 @@ class ParametricPortifolio():
         test_r_nn_constrained = np.mean(self.test_r_nn_constrained_runs, axis=0)
         test_r_nn_constrained_transaction = np.mean(self.test_r_nn_constrained_transaction_runs, axis=0)
 
+
         # Sharp ratio
-        self.sharp_ratio = np.array(self.test_r_runs)/np.array(self.test_r_runs_std)
+
         self.sharp_ratio_constrained = np.array(self.test_r_constrained_runs)/np.array(self.test_r_constrained_runs_std)
-    
-        self.sharp_ratio_nn = np.array(self.test_r_nn_runs)/np.array(self.test_r_nn_runs_std)
+        self.benchmark_sharp_ratio = np.array(self.benchmark_test_r_runs)/np.array(self.benchmark_test_r_runs_std)
+        self.cdi_sharp_ratio = np.array(self.test_cdi_return_runs)/np.array(self.test_cdi_return_std_runs)
+        self.ibov_sharp_ratio = np.array(self.test_ibov_return_runs)/np.array(self.test_ibov_return_std_runs)
         self.sharp_ratio_constrained_nn = np.array(self.test_r_nn_constrained_runs)/np.array(self.test_r_nn_constrained_runs_std)
 
-        sharp_ratio = self.sharp_ratio
+        
         sharp_ratio_constrained = self.sharp_ratio_constrained
-
-        sharp_ratio_nn = self.sharp_ratio_nn
         sharp_ratio_constrained_nn = self.sharp_ratio_constrained_nn
+        benchmark_sharp_ratio = self.benchmark_sharp_ratio
+        ibov_sharp_ratio = self.ibov_sharp_ratio
+        cdi_sharp_ratio = self.cdi_sharp_ratio
 
         LOGGER.info("Plotting final results.")
         # Only allows 10 runs, to allow more increase color names.
@@ -1876,27 +1926,55 @@ class ParametricPortifolio():
         
         # Plotting last weights distribution for constrained and unconstrained nn
         last_dist_nn = self.nn_weight_list[-1][-1]
+        last_dist_nn_negative = last_dist_nn * (last_dist_nn<0)
+        last_dist_nn_positive =last_dist_nn * (last_dist_nn>0)
         last_dist_nn_constrained = self.nn_weight_list_constrained[-1][-1]
+        last_dist_nn_constrained_negative = last_dist_nn_constrained * (last_dist_nn_constrained<0)
+        last_dist_nn_constrained_positive = last_dist_nn_constrained * (last_dist_nn_constrained>0)
+
+        negative_distance = jensenshannon(last_dist_nn_negative, last_dist_nn_constrained_negative)
+        positive_distance = jensenshannon(last_dist_nn_positive, last_dist_nn_constrained_positive)
+
+        LOGGER.info(f"Jensen Shannon distance between positive distributions: {positive_distance}")
+        LOGGER.info(f"Jensen Shannon distance between negative distribution: {negative_distance}")
+
         x = range(len(last_dist_nn))
         plt.figure(figsize=(12,9))
-        plt.title("Last NN distribution")
-        plt.plot(x, last_dist_nn)
+        plt.title("Last NN positive distribution", fontsize=15)
+        plt.plot(x, last_dist_nn_positive)
         plt.xlabel('Stock')
         plt.ylabel('Weights')
         plt.grid()
-        plt.savefig(f'./images/last_nn_weights_distribution{experiment_label}.jpg')
+        plt.savefig(f'./images/last_nn_weights_positive_distribution{experiment_label}.jpg')
 
-
+        x = range(len(last_dist_nn))
         plt.figure(figsize=(12,9))
-        plt.title("Last constrained NN distribution")
-        plt.plot(x, last_dist_nn_constrained)
+        plt.title("Last NN negative distribution", fontsize=15)
+        plt.plot(x, last_dist_nn_negative)
         plt.xlabel('Stock')
         plt.ylabel('Weights')
         plt.grid()
-        plt.savefig(f'./images/last_constrained_nn_weights_distribution{experiment_label}.jpg')
+        plt.savefig(f'./images/last_nn_weights_negative_distribution{experiment_label}.jpg')
+
 
         plt.figure(figsize=(12,9))
-        plt.title("Mean utility function for each optimization step")
+        plt.title("Last constrained NN positive distribution", fontsize=15)
+        plt.plot(x, last_dist_nn_constrained_positive)
+        plt.xlabel('Stock')
+        plt.ylabel('Weights')
+        plt.grid()
+        plt.savefig(f'./images/last_constrained_nn_weights_positive_distribution{experiment_label}.jpg')
+
+        plt.figure(figsize=(12,9))
+        plt.title("Last constrained NN negative distribution", fontsize=15)
+        plt.plot(x, last_dist_nn_constrained_negative)
+        plt.xlabel('Stock')
+        plt.ylabel('Weights')
+        plt.grid()
+        plt.savefig(f'./images/last_constrained_nn_weights_negative_distribution{experiment_label}.jpg')
+
+        plt.figure(figsize=(12,9))
+        plt.title("Mean utility function for each optimization step", fontsize=15)
         for run, mean_obj_r in enumerate(mean_obj_r_runs):
             x = range(len(mean_obj_r))
             plt.plot(x, mean_obj_r, label=f'Objective return, Run:{run+1}', c=colors[run])
@@ -1910,7 +1988,7 @@ class ParametricPortifolio():
         plt.close()
 
         plt.figure(figsize=(12,9))
-        plt.title("Mean return using weight for each optimization step")
+        plt.title("Mean return using weight for each optimization step", fontsize=15)
         for run, mean_r in enumerate(mean_r_runs):
             x = range(len(mean_r))
             plt.plot(x, mean_r, label=f'Optimized return, Run:{run+1}', c=colors[run])
@@ -1919,9 +1997,9 @@ class ParametricPortifolio():
             plt.plot(x, mean_constrained_transaction_r_runs[run], label=f'Optimized return with weight constraints and transaction costs, Run:{run+1}', c=colors[run], linestyle='dashdot')
             plt.plot(x, self.mean_r_val_runs[run], label=f'Optimized validation return, Run:{run+1}', c=colors[run], linestyle='dashed', dash_joinstyle='round', dash_capstyle='round')
 
-            plt.text(x[-1], mean_r[-1]*1.01, f'In sample \nreturn: {mean_r[-1]:.3f}%')
-            plt.text(x[-1], mean_constrained_r_runs[run][-1]*1.01, f'In sample constrained return: \n{mean_constrained_r_runs[run][-1]:.3f}%')
-            plt.text(x[-1], self.mean_r_val_runs[run][-1]*0.95, f'In sample validation \nreturn: {self.mean_r_val_runs[run][-1]:.3f}%')
+            plt.text(x[-1], mean_r[-1]*1.01, f'In sample \nreturn: {mean_r[-1]:.3f}%', fontsize=12)
+            plt.text(x[-1], mean_constrained_r_runs[run][-1]*1.01, f'In sample constrained return: \n{mean_constrained_r_runs[run][-1]:.3f}%', fontsize=12)
+            plt.text(x[-1], self.mean_r_val_runs[run][-1]*0.95, f'In sample validation \nreturn: {self.mean_r_val_runs[run][-1]:.3f}%', fontsize=12)
         plt.xlabel('Iteration step')
         plt.ylabel('Mean return')
         # plt.legend(loc="lower left")
@@ -1933,7 +2011,7 @@ class ParametricPortifolio():
         
 
         plt.figure(figsize=(12,9))
-        plt.title("Train return on NN")
+        plt.title("Train return on NN", fontsize=15)
         for run, mean_r in enumerate(self.nn_return_runs):
             x = range(len(mean_r))
             plt.plot(x, mean_r, label=f'NN return, Run:{run+1}', c=colors[run])
@@ -1941,10 +2019,10 @@ class ParametricPortifolio():
             plt.plot(x, self.nn_return_constrained_runs[run], label=f'NN constrained return, Run:{run+1}', c=colors[run], linestyle='dotted')
             plt.plot(x, self.nn_val_return_constrained_runs[run], label=f'NN constrained validation return, Run:{run+1}', c=colors[run], linestyle='dashdot')
 
-            plt.text(x[-1], mean_r[-1]*1.01, f'In sample return: \n{mean_r[-1]:.3f}%')
-            plt.text(x[-1], self.nn_val_return_runs[run][-1]*1.01, f'Validation return: \n{self.nn_val_return_runs[run][-1]:.3f}%')
-            plt.text(x[-1], self.nn_return_constrained_runs[run][-1]*1.01, f'In sample constrained \nreturn: {self.nn_return_constrained_runs[run][-1]:.3f}%')
-            plt.text(x[-1], self.nn_val_return_constrained_runs[run][-1]*1.01, f'Validation constrained \nreturn: {self.nn_val_return_constrained_runs[run][-1]:.3f}%')
+            plt.text(x[-1], mean_r[-1]*1.01, f'In sample return: \n{mean_r[-1]:.3f}%', fontsize=12)
+            plt.text(x[-1], self.nn_val_return_runs[run][-1]*1.01, f'Validation return: \n{self.nn_val_return_runs[run][-1]:.3f}%', fontsize=12)
+            plt.text(x[-1], self.nn_return_constrained_runs[run][-1]*1.01, f'In sample constrained \nreturn: {self.nn_return_constrained_runs[run][-1]:.3f}%', fontsize=12)
+            plt.text(x[-1], self.nn_val_return_constrained_runs[run][-1]*1.01, f'Validation constrained \nreturn: {self.nn_val_return_constrained_runs[run][-1]:.3f}%', fontsize=12)
         plt.ylabel("Mean return")
         plt.xlabel("Epochs")
         plt.legend()
@@ -1954,7 +2032,7 @@ class ParametricPortifolio():
         plt.close()
 
         plt.figure(figsize=(12,9))
-        plt.title("Loss for each epoch")
+        plt.title("Loss for each epoch", fontsize=15)
         for run, loss in enumerate(self.nn_loss_runs):
             x = range(len(loss))
             plt.plot(x, loss, label=f'Objective loss, Run:{run+1}', c=colors[run])
@@ -1980,7 +2058,7 @@ class ParametricPortifolio():
         plt.close()
 
         plt.figure(figsize=(12,9))
-        plt.title("Mean return on test set")
+        plt.title("Mean return on test set", fontsize=15)
         plt.ylabel('Mean return')
 
         plt.bar(br1, test_r_constrained_mean, label='Optimized test return with weight constraints', color='green', width = 0.09, alpha=0.5)
@@ -1988,23 +2066,23 @@ class ParametricPortifolio():
         plt.bar(br3, benchmark_test_r_mean, label='Benchmark test return', color='red', width = 0.09, alpha=0.5)
         plt.bar(br4, test_r_nn_constrained, label='Optimized test return using NN with weight constraints', color='coral', width = 0.09, alpha=0.5)
         plt.bar(br5, test_r_nn_constrained_transaction, label='Optimized test return using NN with weight constraints and transaction costs.', color='violet', width = 0.09, alpha=0.5)
-        plt.bar(br6, self.test_cdi_return.mean(), label='CDI/Selic mean return', color='cyan', width = 0.09, alpha=0.5)
-        plt.bar(br7, self.test_ibov_return.mean(), label='IBOV mean return', color='lime', width = 0.09, alpha=0.5)
+        plt.bar(br6, cdi_mean_r, label='CDI/Selic mean return', color='cyan', width = 0.09, alpha=0.5)
+        plt.bar(br7, ibov_mean_r, label='IBOV mean return', color='lime', width = 0.09, alpha=0.5)
 
-        plt.text(-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%')
-        plt.text(width-0.04, test_r_constrained_transaction_mean*1.01, f' Return :{test_r_constrained_transaction_mean:.3f}%')
-        plt.text(2*width-0.04 , benchmark_test_r_mean*1.01, f'Return :{benchmark_test_r_mean:.3f}%')
-        plt.text(3*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%')
-        plt.text(4*width-0.04 , test_r_nn_constrained_transaction*1.01, f'Return :{test_r_nn_constrained_transaction:.3f}%')
-        plt.text(5*width-0.04 , self.test_cdi_return.mean()*1.01, f'Return :{self.test_cdi_return.mean():.3f}%')
-        plt.text(6*width-0.04 , self.test_ibov_return.mean()*1.01, f'Return :{self.test_ibov_return.mean():.3f}%')
+        plt.text(-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%', fontsize=12)
+        plt.text(width-0.04, test_r_constrained_transaction_mean*1.01, f' Return :{test_r_constrained_transaction_mean:.3f}%', fontsize=12)
+        plt.text(2*width-0.04 , benchmark_test_r_mean*1.01, f'Return :{benchmark_test_r_mean:.3f}%', fontsize=12)
+        plt.text(3*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%', fontsize=12)
+        plt.text(4*width-0.04 , test_r_nn_constrained_transaction*1.01, f'Return :{test_r_nn_constrained_transaction:.3f}%', fontsize=12)
+        plt.text(5*width-0.04 , cdi_mean_r*1.01, f'Return :{cdi_mean_r:.3f}%', fontsize=12)
+        plt.text(6*width-0.04 , ibov_mean_r*1.01, f'Return :{ibov_mean_r:.3f}%', fontsize=12)
         plt.xticks([])
         plt.legend(loc="center left")
         plt.savefig(f'./images/mean_return_comparison_test_set_{experiment_label}.jpg')
 
 
         plt.figure(figsize=(12,9))
-        plt.title("Return on test set for each run")
+        plt.title("Return on test set for each run", fontsize=15)
         plt.ylabel('Mean return')
         width = 0.1
         br = np.arange(1)
@@ -2019,14 +2097,14 @@ class ParametricPortifolio():
                 label=f'Test mean return at run: {idx+1}',
                 color=colors[idx], width = 0.09, alpha=0.5
             )
-            plt.text( width*idx-0.02, nn_test_return*1.01, f'Return  :{nn_test_return:.3f}%')
+            plt.text( width*idx-0.02, nn_test_return*1.01, f'Return  :{nn_test_return:.3f}%', fontsize=12)
         plt.xticks([])
         plt.legend()
         plt.savefig(f'./images/return_nn_test_set_{experiment_label}.jpg')
 
 
         plt.figure(figsize=(12,9))
-        plt.title("Return on test set using constrained model for each run")
+        plt.title("Return on test set using constrained model for each run", fontsize=15)
         plt.ylabel('Mean return')
         width = 0.1
         br = np.arange(1)
@@ -2038,7 +2116,7 @@ class ParametricPortifolio():
                 label=f'Constrained test mean return at run: {idx+1}',
                 color=colors[idx], width = 0.09, alpha=0.5
             )
-            plt.text( width*idx-0.02, constrained_nn_test_return*1.01, f'Return  :{constrained_nn_test_return:.3f}%')
+            plt.text( width*idx-0.02, constrained_nn_test_return*1.01, f'Return  :{constrained_nn_test_return:.3f}%', fontsize=12)
         plt.xticks([])
         plt.legend()
         plt.savefig(f'./images/return_nn_constrained_test_set_{experiment_label}.jpg')
@@ -2050,10 +2128,10 @@ class ParametricPortifolio():
         plt.bar(br2, test_r_constrained_mean, label='Optimized test return with weight constraints', color='green', width = 0.09, alpha=0.5)
         plt.bar(br3, test_r_nn, label='Optimized test return using NN', color='black', width = 0.09, alpha=0.5)
         plt.bar(br4, test_r_nn_constrained, label='Optimized test return using NN with weight constraints', color='red', width = 0.09, alpha=0.5)
-        plt.text(-0.04, test_r_mean*1.01, f'Return :{test_r_mean:.3f}%')
-        plt.text(width-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%')
-        plt.text(2*width-0.04 , test_r_nn*1.01, f'Return :{test_r_nn:.3f}%')
-        plt.text(3*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%')
+        plt.text(-0.04, test_r_mean*1.01, f'Return :{test_r_mean:.3f}%', fontsize=12)
+        plt.text(width-0.04, test_r_constrained_mean*1.01, f'Return  :{test_r_constrained_mean:.3f}%', fontsize=12)
+        plt.text(2*width-0.04 , test_r_nn*1.01, f'Return :{test_r_nn:.3f}%', fontsize=12)
+        plt.text(3*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%', fontsize=12)
         plt.xticks([])
         plt.legend(loc="center left")
         plt.savefig(f'./images/constraint_mean_return_comparison_test_set_{experiment_label}.jpg')
@@ -2065,7 +2143,7 @@ class ParametricPortifolio():
                 for weight_type in self.weights_computed:
                     weights = self.weights_computed[weight_type][index]
                     plt.figure(figsize=(12,9))
-                    plt.title(f"Stocks {weight_type.replace('_', ' ')} weights over time heatmap")
+                    plt.title(f"Stocks {weight_type.replace('_', ' ')} weights over time heatmap", fontsize=15)
                     plt.pcolor(weights.T, cmap=cm.seismic)
                     plt.ylabel("Time")
                     plt.xlabel("Stocks")
@@ -2074,20 +2152,24 @@ class ParametricPortifolio():
         plt.close()
 
         plt.figure(figsize=(12,9))
-        sharp_ratio = np.mean(sharp_ratio)
-        sharp_ratio_constrained = np.mean(sharp_ratio_constrained)
-        sharp_ratio_nn=np.mean(sharp_ratio_nn)
-        sharp_ratio_constrained_nn=np.mean(sharp_ratio_constrained_nn)
-        plt.title("Mean sharpe ratios")
-        plt.bar(0, sharp_ratio, label='Optimized mean sharpe ratio')
-        plt.bar(1, sharp_ratio_constrained, label='Optimized constrained mean sharpe ratio')
-        plt.bar(2, sharp_ratio_nn, label='Optimized mean sharpe ratio with NN')
-        plt.bar(3, sharp_ratio_constrained_nn, label='Optimized constrained mean sharpe ratio with NN')
 
-        plt.text(-0.3, sharp_ratio*1.01, f'Sharpe Ratio: {sharp_ratio:.3f}')
-        plt.text(1-0.3, sharp_ratio_constrained*1.01, f'Sharpe Ratio: {sharp_ratio_constrained:.3f}')
-        plt.text(2-0.3, sharp_ratio_nn*1.01, f'Sharpe Ratio: {sharp_ratio_nn:.3f}')
-        plt.text(3-0.3, sharp_ratio_constrained_nn*1.01, f'Sharpe Ratio: {sharp_ratio_constrained_nn:.3f}')
+        benchmark_sharp_ratio = np.mean(benchmark_sharp_ratio)
+        sharp_ratio_constrained = np.mean(sharp_ratio_constrained)
+        ibov_sharp_ratio=np.mean(ibov_sharp_ratio)
+        cdi_sharp_ratio=np.mean(cdi_sharp_ratio)
+        sharp_ratio_constrained_nn=np.mean(sharp_ratio_constrained_nn)
+        plt.title("Mean sharpe ratios", fontsize=15)
+        plt.bar(0, benchmark_sharp_ratio, label='Benchmark mean sharpe ratio')
+        plt.bar(1, sharp_ratio_constrained, label='Optimized constrained mean sharpe ratio')
+        plt.bar(2, ibov_sharp_ratio, label='Ibov mean sharpe ratio')
+        plt.bar(3, sharp_ratio_constrained_nn, label='Optimized constrained mean sharpe ratio with NN')
+        # plt.bar(4, cdi_sharp_ratio, label='CDI mean sharpe ratio')
+
+        plt.text(-0.3, benchmark_sharp_ratio*1.01, f'Sharpe Ratio: {benchmark_sharp_ratio:.3f}', fontsize=12)
+        plt.text(1-0.3, sharp_ratio_constrained*1.01, f'Sharpe Ratio: {sharp_ratio_constrained:.3f}', fontsize=12)
+        plt.text(2-0.3, ibov_sharp_ratio*1.01, f'Sharpe Ratio: {ibov_sharp_ratio:.3f}', fontsize=12)
+        plt.text(3-0.3, sharp_ratio_constrained_nn*1.01, f'Sharpe Ratio: {sharp_ratio_constrained_nn:.3f}', fontsize=12)
+        # plt.text(4-0.3, cdi_sharp_ratio*1.01, f'Sharpe Ratio: {cdi_sharp_ratio:.3f}', fontsize=12)
         plt.legend(loc="lower right")
         plt.savefig(f'./images/mean_sharpe_ratios_{experiment_label}.jpg')
 
@@ -2100,7 +2182,7 @@ class ParametricPortifolio():
             time_range = self.weights_computed[weight_type][0].shape[1]
             w = self.weights_computed[weight_type][0]
             plt.figure(figsize=(12,9))
-            plt.title(f"Total Leverage percentage for each test time step using {weight_type.replace('_', ' ')} weights")
+            plt.title(f"Total Leverage percentage for each test time step using {weight_type.replace('_', ' ')} weights", fontsize=15)
             plt.ylabel("Percentage")
             plt.xlabel("Test time step")
             plt.bar(range(time_range) ,abs(w*(w<0)).sum(axis=0)*100)
@@ -2109,7 +2191,7 @@ class ParametricPortifolio():
             
             min_leverage_values = abs((w*(w<0)).min(axis=0))*100
             plt.figure(figsize=(12,9))
-            plt.title(f"Highest leverage percentage for each test time step using {weight_type.replace('_', ' ')} weights")
+            plt.title(f"Highest leverage percentage for each test time step using {weight_type.replace('_', ' ')} weights", fontsize=15)
             plt.ylabel("Percentage")
             plt.xlabel("Test time step")
             plt.bar(range(time_range) , min_leverage_values)
@@ -2126,7 +2208,7 @@ class ParametricPortifolio():
         for comp_field in comparison_fields:
             for cal_field in calculated_fields:
                 plt.figure(figsize=(12,9))
-                plt.title(f"Comparisson between {cal_field} and {comp_field} results.")
+                plt.title(f"Comparisson between {cal_field} and {comp_field} results.", fontsize=15)
                 y = self.results_comparison[f"test_{cal_field}_{comp_field}_comparison"]
                 x = range(len(y))
                 plt.ylabel("Difference between return")
