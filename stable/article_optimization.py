@@ -1981,7 +1981,7 @@ class ParametricPortifolio():
             plt.plot(x, self.mean_obj_r_val_runs[run], label=f'Objective validation return, Run:{run+1}', c=colors[run], linestyle='dashed')
         plt.xlabel('Iteration step')
         plt.ylabel('Objective return')
-        plt.legend()
+        plt.legend(fontsize=12)
         plt.grid()
         plt.savefig(f'./images/opt_utility_function_over_steps_{experiment_label}.jpg')
         
@@ -2025,7 +2025,7 @@ class ParametricPortifolio():
             plt.text(x[-1], self.nn_val_return_constrained_runs[run][-1]*1.01, f'Validation constrained \nreturn: {self.nn_val_return_constrained_runs[run][-1]:.3f}%', fontsize=12)
         plt.ylabel("Mean return")
         plt.xlabel("Epochs")
-        plt.legend()
+        plt.legend(fontsize=12)
         plt.grid()
         plt.savefig(f'./images/nn_mean_return_over_epochs_{experiment_label}.jpg')
 
@@ -2039,7 +2039,7 @@ class ParametricPortifolio():
             plt.plot(x, self.nn_val_loss_runs[run], label=f'Objective validation loss, Run:{run+1}', c=colors[run], linestyle='dashed')
         plt.ylabel("Objective loss")
         plt.xlabel("Epochs")
-        plt.legend()
+        plt.legend(fontsize=12)
         plt.grid()
         plt.savefig(f'./images/nn_loss_over_epochs_{experiment_label}.jpg')
 
@@ -2077,7 +2077,7 @@ class ParametricPortifolio():
         plt.text(5*width-0.04 , cdi_mean_r*1.01, f'Return :{cdi_mean_r:.3f}%', fontsize=12)
         plt.text(6*width-0.04 , ibov_mean_r*1.01, f'Return :{ibov_mean_r:.3f}%', fontsize=12)
         plt.xticks([])
-        plt.legend(loc="center left")
+        plt.legend(loc="center left", fontsize=12)
         plt.savefig(f'./images/mean_return_comparison_test_set_{experiment_label}.jpg')
 
 
@@ -2099,7 +2099,7 @@ class ParametricPortifolio():
             )
             plt.text( width*idx-0.02, nn_test_return*1.01, f'Return  :{nn_test_return:.3f}%', fontsize=12)
         plt.xticks([])
-        plt.legend()
+        plt.legend(fontsize=12)
         plt.savefig(f'./images/return_nn_test_set_{experiment_label}.jpg')
 
 
@@ -2118,7 +2118,7 @@ class ParametricPortifolio():
             )
             plt.text( width*idx-0.02, constrained_nn_test_return*1.01, f'Return  :{constrained_nn_test_return:.3f}%', fontsize=12)
         plt.xticks([])
-        plt.legend()
+        plt.legend(fontsize=12)
         plt.savefig(f'./images/return_nn_constrained_test_set_{experiment_label}.jpg')
 
         plt.figure(figsize=(12,9))
@@ -2133,7 +2133,7 @@ class ParametricPortifolio():
         plt.text(2*width-0.04 , test_r_nn*1.01, f'Return :{test_r_nn:.3f}%', fontsize=12)
         plt.text(3*width-0.04 , test_r_nn_constrained*1.01, f'Return :{test_r_nn_constrained:.3f}%', fontsize=12)
         plt.xticks([])
-        plt.legend(loc="center left")
+        plt.legend(loc="center left", fontsize=12)
         plt.savefig(f'./images/constraint_mean_return_comparison_test_set_{experiment_label}.jpg')
 
 
@@ -2160,18 +2160,41 @@ class ParametricPortifolio():
         sharp_ratio_constrained_nn=np.mean(sharp_ratio_constrained_nn)
         plt.title("Mean sharpe ratios", fontsize=15)
         plt.bar(0, benchmark_sharp_ratio, label='Benchmark mean sharpe ratio')
-        plt.bar(1, sharp_ratio_constrained, label='Optimized constrained mean sharpe ratio')
-        plt.bar(2, ibov_sharp_ratio, label='Ibov mean sharpe ratio')
+        plt.bar(1, ibov_sharp_ratio, label='Ibov mean sharpe ratio')
+        plt.bar(2, sharp_ratio_constrained, label='Optimized constrained mean sharpe ratio')
         plt.bar(3, sharp_ratio_constrained_nn, label='Optimized constrained mean sharpe ratio with NN')
         # plt.bar(4, cdi_sharp_ratio, label='CDI mean sharpe ratio')
 
         plt.text(-0.3, benchmark_sharp_ratio*1.01, f'Sharpe Ratio: {benchmark_sharp_ratio:.3f}', fontsize=12)
-        plt.text(1-0.3, sharp_ratio_constrained*1.01, f'Sharpe Ratio: {sharp_ratio_constrained:.3f}', fontsize=12)
-        plt.text(2-0.3, ibov_sharp_ratio*1.01, f'Sharpe Ratio: {ibov_sharp_ratio:.3f}', fontsize=12)
+        plt.text(1-0.3, ibov_sharp_ratio*1.01, f'Sharpe Ratio: {ibov_sharp_ratio:.3f}', fontsize=12)
+        plt.text(2-0.3, sharp_ratio_constrained*1.01, f'Sharpe Ratio: {sharp_ratio_constrained:.3f}', fontsize=12)
         plt.text(3-0.3, sharp_ratio_constrained_nn*1.01, f'Sharpe Ratio: {sharp_ratio_constrained_nn:.3f}', fontsize=12)
         # plt.text(4-0.3, cdi_sharp_ratio*1.01, f'Sharpe Ratio: {cdi_sharp_ratio:.3f}', fontsize=12)
-        plt.legend(loc="lower right")
+        plt.legend(loc="lower right", fontsize=12)
         plt.savefig(f'./images/mean_sharpe_ratios_{experiment_label}.jpg')
+
+        plt.close()
+
+
+        plt.figure(figsize=(12,9))
+        sharp_ratio = np.array(self.test_r_runs)/np.array(self.test_r_runs_std)
+        sharp_ratio_nn = np.array(self.test_r_nn_runs)/np.array(self.test_r_nn_runs_std)
+        sharp_ratio = np.mean(sharp_ratio)
+        sharp_ratio_constrained = np.mean(sharp_ratio_constrained)
+        sharp_ratio_nn=np.mean(sharp_ratio_nn)
+        sharp_ratio_constrained_nn=np.mean(sharp_ratio_constrained_nn)
+        plt.title("Constrained sharpe ratios comparison", fontsize=15)
+        plt.bar(0, sharp_ratio, label='Optimized mean sharpe ratio')
+        plt.bar(1, sharp_ratio_constrained, label='Optimized constrained mean sharpe ratio')
+        plt.bar(2, sharp_ratio_nn, label='Optimized mean sharpe ratio with NN')
+        plt.bar(3, sharp_ratio_constrained_nn, label='Optimized constrained mean sharpe ratio with NN')
+        plt.text(-0.3, sharp_ratio*1.01, f'Sharpe Ratio: {sharp_ratio:.3f}', fontsize=12)
+        plt.text(1-0.3, sharp_ratio_constrained*1.01, f'Sharpe Ratio: {sharp_ratio_constrained:.3f}', fontsize=12)
+        plt.text(2-0.3, sharp_ratio_nn*1.01, f'Sharpe Ratio: {sharp_ratio_nn:.3f}', fontsize=12)
+        plt.text(3-0.3, sharp_ratio_constrained_nn*1.01, f'Sharpe Ratio: {sharp_ratio_constrained_nn:.3f}', fontsize=12)
+        plt.legend(loc="lower right", fontsize=12)
+        plt.savefig(f'./images/constrained_sharpe_ratios_{experiment_label}.jpg')
+
 
         plt.close()
 
