@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Utils module documentation &mdash; Portfolio Optmization 1.0.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Article optimization module documentation" href="portifolio_optimization.html" />
+    <link rel="prev" title="Welcome to Portfolio Optmization’s documentation!" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> Portfolio Optmization
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Utils module documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="portifolio_optimization.html">Article optimization module documentation</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Portfolio Optmization</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Utils module documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/utils.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-utils">
+<span id="utils-module-documentation"></span><h1>Utils module documentation<a class="headerlink" href="#module-utils" title="Permalink to this headline"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="utils.ParametricPortifolioNN">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">ParametricPortifolioNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.ParametricPortifolioNN" title="Permalink to this definition"></a></dt>
+<dd><dl class="py method">
+<dt class="sig sig-object py" id="utils.ParametricPortifolioNN.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.ParametricPortifolioNN.forward" title="Permalink to this definition"></a></dt>
+<dd><p>x -&gt; Shape (T, N, 3)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="utils.ParametricPortifolioNN.utility_function">
+<span class="sig-name descname"><span class="pre">utility_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">portfolio_return</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.ParametricPortifolioNN.utility_function" title="Permalink to this definition"></a></dt>
+<dd><p>CRRA Utility function
+:param risk_factor: Risk constant, increase it to become more risk averse.
+:type risk_factor: int
+:param portifolio_return: Mean return of a portifolio.
+:type portifolio_return: float</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><strong>value</strong> – Utility function value</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.calculate_best_validation_technique">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">calculate_best_validation_technique</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">firm_characteristics</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.calculate_best_validation_technique" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate best validation technique based on each
+time series from firm characteristics.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>firm_characteristics</strong> (<em>pandas.DataFrame</em>) – Dataframe containing all characteristics for
+all stocks at each time step.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.compute_transaction_costs">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">compute_transaction_costs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_path</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.compute_transaction_costs" title="Permalink to this definition"></a></dt>
+<dd><p>Compute transaction costs using volume values
+and putting in a comission tax.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>data_path</strong> (<em>str</em>) – Path where all data is to be found.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>market_cost</strong> – Array with market cost using
+stock volume as base.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>numpy.Array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.constrain_weights">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">constrain_weights</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">w</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.constrain_weights" title="Permalink to this definition"></a></dt>
+<dd><p>Constrain weights to have only the permitted leverage</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>w</strong> (<em>numpy.Array</em>) – Array of weights computed by its models.
+May or not have leverage larger than permited_leverage.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>new_w</strong> – New weights with only permited leverage
+at each time step</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>numpy.Array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.constrain_weights_hard">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">constrain_weights_hard</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">weights</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.constrain_weights_hard" title="Permalink to this definition"></a></dt>
+<dd><p>Constrain weights to be nonnegative.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>weights</strong> (<em>numpy.Array</em>) – Weights after optimization with short positions (negative weights).</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>weights</strong> – Weights processed and normalized to sum 1 each time.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>numpy.Array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.convert_to_nn_variables">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">convert_to_nn_variables</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">firm_characteristics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w_benchmark</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.convert_to_nn_variables" title="Permalink to this definition"></a></dt>
+<dd><p>Convert numpy variables to torch variables</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>firm_characteristics</strong> (<em>pd.DataFrame</em><em>(</em><em>float</em><em>)</em>) – Normalized firm_characteristics</p></li>
+<li><p><strong>r</strong> (<em>np.Array</em><em>(</em><em>float</em><em>)</em>) – Monthly return</p></li>
+<li><p><strong>w_benchmark</strong> (<em>np.Array</em><em>(</em><em>float</em><em>)</em>) – Benchmark weights</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>torch_characteristics</strong> (<em>torch.Tensor</em>) – Torch mapped firm characteristics</p></li>
+<li><p><strong>torch_r</strong> (<em>torch.Tensor</em>) – Torch mapped Monthly return</p></li>
+<li><p><em>torch_benchmark torch.Tensor</em> – Torch mapped Benchmark weights</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.create_w_benchmark">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">create_w_benchmark</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">number_of_stocks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.create_w_benchmark" title="Permalink to this definition"></a></dt>
+<dd><p>Create benchmark weights, uniform weighted on the number of stocks .</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>number_of_stocks</strong> (<em>int</em>) – Number of stocks to be analized.</p></li>
+<li><p><strong>time</strong> (<em>int</em>) – Number of periods of time this slice has.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>w_bechmark</strong> – Benchmark weights with shape equal to (number_of_stocks, time).</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>numpy.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.data_split">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">data_split</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_percentage</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_percentage</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.data_split" title="Permalink to this definition"></a></dt>
+<dd><p>Define indexes for splitted train and test set using a split percentage.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>size</strong> (<em>int</em>) – Total size of the data to be splitted.</p></li>
+<li><p><strong>train_percentage</strong> (<em>float</em>) – Percentage between 0 and 1, where the training and testing data are splitted.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>indexes_list</strong> – List of tuples containing training indexes and testing indexes.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>[( [int, ], [int, ] )]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.loss_fn">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">loss_fn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.loss_fn" title="Permalink to this definition"></a></dt>
+<dd><p>Simple loss function repeating foward calculations</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.plot_splitted_data">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">plot_splitted_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">characteristic_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">characteristic_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indexes_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stock_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.plot_splitted_data" title="Permalink to this definition"></a></dt>
+<dd><p>Plot train and test splitted data and save it to a jpg file in the folder.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>characteristic_df</strong> (<em>pandas.DataFrame</em>) – A characteristic dataframe to be splitted.</p></li>
+<li><p><strong>characteristic_name</strong> (<em>str</em>) – The name of the characteristic used here.</p></li>
+<li><p><strong>indexes_list</strong> (<em>[</em><em>( </em><em>[</em><em>int</em><em>, </em><em>]</em><em>, </em><em>[</em><em>int</em><em>, </em><em>] </em><em>)</em><em>]</em>) – List of tuples containing training indexes and testing indexes.</p></li>
+<li><p><strong>stock_name</strong> (<em>str</em>) – The stock tick to be used for lookup.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.utility_function">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">utility_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">risk_factor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">portfolio_return</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.utility_function" title="Permalink to this definition"></a></dt>
+<dd><p>CRRA Utility function</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>risk_factor</strong> (<em>int</em>) – Risk constant, increase it to become more risk averse.</p></li>
+<li><p><strong>portifolio_return</strong> (<em>float</em>) – Mean return of a portifolio.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>value</strong> – Utility function value</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="utils.weight_reset">
+<span class="sig-prename descclassname"><span class="pre">utils.</span></span><span class="sig-name descname"><span class="pre">weight_reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#utils.weight_reset" title="Permalink to this definition"></a></dt>
+<dd><p>Reset neural network weights to retrain it</p>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="Welcome to Portfolio Optmization’s documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="portifolio_optimization.html" class="btn btn-neutral float-right" title="Article optimization module documentation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022, Gabriel Vieira.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
